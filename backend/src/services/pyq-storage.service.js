@@ -1,0 +1,76 @@
+import { randomUUID } from "node:crypto";
+import { v2 as cloudinary } from "cloudinary";
+import { env } from "../config/env.js";
+
+function getCloudinary() {
+  if (!env.cloudinaryCloudName || !env.cloudinaryApiKey || !env.cloudinaryApiSecret) {
+    const error = new Error("PYQ storage is not configured. Contact an administrator.");
+    error.statusCode = 503;
+    throw error;
+  }
+  cloudinary.config({
+    cloud_name: env.cloudinaryCloudName,
+    api_key: env.cloudinaryApiKey,
+    api_secret: env.cloudinaryApiSecret,
+    secure: true,
+  });
+  return cloudinary;
+}
+
+export async function uploadPyqPdf(file) {
+  const storage = getCloudinary();
+  return new Promise((resolve, reject) => {
+    const upload = storage.uploader.upload_stream(
+      {
+        folder: "academic-pyqs",
+        public_id: randomUUID(),
+        resource_type: "raw",
+        type: "authenticated",
+        overwrite: false,
+      },
+      (error, result) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve({
+          provider: "cloudinary",
+          publicId: result.public_id,
+          resourceType: "raw",
+          accessType: "authenticated",
+          bytes: file.size,
+        });
+      },
+    );
+    upload.end(file.buffer);
+  });
+}
+
+export async function deletePyqPdf(storageInfo) {
+  const storage = getCloudinary();
+  const result = await storage.uploader.destroy(storageInfo.publicId, {
+    resource_type: "raw",
+    type: storageInfo.accessType ?? "upload",
+    invalidate: true,
+  });
+  if (!["ok", "not found"].includes(result.result)) {
+    throw new Error("The PYQ PDF could not be deleted from storage.");
+  }
+}
+
+export function getPublicPyqPdfUrl(storageInfo) {
+  const storage = getCloudinary();
+  if ((storageInfo.accessType ?? "upload") === "authenticated") {
+    return storage.utils.private_download_url(storageInfo.publicId, "pdf", {
+      resource_type: "raw",
+      type: "authenticated",
+      expires_at: Math.floor(Date.now() / 1000) + 300,
+    });
+  }
+  return storage.url(storageInfo.publicId, {
+    resource_type: "raw",
+    type: "upload",
+    secure: true,
+    format: "pdf",
+  });
+}

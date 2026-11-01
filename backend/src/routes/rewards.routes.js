@@ -1,0 +1,44 @@
+import { Router } from "express";
+import {
+  adjustStudentRewards,
+  awardHighQualityResource,
+  getAdminRewardsOverview,
+  getMyRewards,
+  getRewardsLeaderboard,
+} from "../controllers/rewards.controller.js";
+import { requireAuth, requireRole } from "../middleware/auth.middleware.js";
+
+const rewardsRouter = Router();
+
+rewardsRouter.get(
+  "/me",
+  requireAuth,
+  requireRole("student"),
+  getMyRewards,
+);
+rewardsRouter.get(
+  "/leaderboard",
+  requireAuth,
+  requireRole("student"),
+  getRewardsLeaderboard,
+);
+rewardsRouter.get(
+  "/admin/overview",
+  requireAuth,
+  requireRole("admin"),
+  getAdminRewardsOverview,
+);
+rewardsRouter.post(
+  "/admin/adjust",
+  requireAuth,
+  requireRole("admin"),
+  adjustStudentRewards,
+);
+rewardsRouter.post(
+  "/admin/quality-bonus",
+  requireAuth,
+  requireRole("admin"),
+  awardHighQualityResource,
+);
+
+export default rewardsRouter;
