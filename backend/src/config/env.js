@@ -1,6 +1,10 @@
 import dotenv from "dotenv";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-dotenv.config();
+dotenv.config({
+  path: resolve(dirname(fileURLToPath(import.meta.url)), "../../.env"),
+});
 
 export const env = {
   port: Number.parseInt(process.env.PORT ?? "5000", 10),
@@ -14,7 +18,7 @@ export const env = {
     .filter(Boolean),
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:5173",
   jwtSecret: process.env.JWT_SECRET ?? "",
-  smtpHost: process.env.SMTP_HOST ?? "",
+  smtpHost: process.env.SMTP_HOST ?? "smtp.gmail.com",
   smtpPort: Number.parseInt(process.env.SMTP_PORT ?? "587", 10),
   smtpSecure: process.env.SMTP_SECURE === "true",
   smtpUser: process.env.SMTP_USER ?? "",

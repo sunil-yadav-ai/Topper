@@ -1,0 +1,175 @@
+import { useEffect, useRef, useState } from "react";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useGSAP } from "@gsap/react";
+import { useAuth } from "../context/AuthContext.jsx";
+import { gsap } from "../lib/gsap.js";
+import NotificationBell from "./NotificationBell.jsx";
+
+gsap.registerPlugin(useGSAP);
+
+function BrandMark({ inverse = false }) {
+  return (
+    <span className={`ed-brand ${inverse ? "ed-brand-inverse" : ""}`}>
+      <span aria-hidden="true" className="ed-brand-mark">e</span>
+      <span>edu<span>rise</span></span>
+    </span>
+  );
+}
+
+export function SiteHeader() {
+  const { user, signOut } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const dashboardPath = user
+    ? user.role === "admin" ? "/admin" : "/dashboard"
+    : "/register";
+
+  useEffect(() => {
+    setMenuOpen(false);
+    setSignOutError("");
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [menuOpen]);
+
+  async function handleSignOut() {
+    setSignOutError("");
+    try {
+      await signOut();
+      navigate("/", { replace: true });
+    } catch (error) {
+      setSignOutError(error.response?.data?.message ?? error.message ?? "Could not sign out. Please try again.");
+    }
+  }
+
+  return (
+    <header className="ed-header ed-app-header">
+      <div className="ed-header-inner">
+        <Link aria-label="EduRise home" className="ed-logo-link" to="/"><BrandMark /></Link>
+        <button
+          aria-expanded={menuOpen}
+          aria-label={menuOpen ? "Close navigation" : "Open navigation"}
+          className="ed-menu-toggle"
+          onClick={() => setMenuOpen((open) => !open)}
+          type="button"
+        >
+          <span /><span />
+        </button>
+        <nav aria-label="Main navigation" className={`ed-nav ed-app-nav ${menuOpen ? "ed-nav-open" : ""}`}>
+          <Link to="/search">Explore</Link>
+          <Link to="/pyqs">Free PYQs</Link>
+          {user ? (
+            <>
+              <Link to="/library">My library</Link>
+              <NotificationBell />
+              <button className="ed-nav-signout" onClick={handleSignOut} type="button">Sign out</button>
+            </>
+          ) : (
+            <Link to="/login">Student sign in</Link>
+          )}
+          <Link className="ed-nav-cta" to={dashboardPath}>
+            {user ? "My dashboard" : "Join for free"}
+            <span aria-hidden="true" className="ed-arrow">→</span>
+          </Link>
+        </nav>
+        {signOutError && <p className="ed-nav-error" role="alert">{signOutError}</p>}
+      </div>
+    </header>
+  );
+}
+
+export function SiteFooter() {
+  const shareUrl = encodeURIComponent(window.location.origin);
+  const shareText = encodeURIComponent(
+    "Learn Together. Rise Together. Discover EduRise, a free student resource-sharing community.",
+  );
+  const contactEmail = (import.meta.env.VITE_CONTACT_EMAIL ?? "").trim();
+  const validContactEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)
+    ? contactEmail
+    : "";
+
+  return (
+    <footer className="ed-footer ed-app-footer">
+      <div aria-hidden="true" className="ed-footer-top-art"><span>✳</span><span>↗</span><span>✦</span></div>
+      <div className="ed-footer-inner">
+        <div className="ed-footer-main">
+          <div className="ed-footer-brand">
+            <Link aria-label="EduRise home" to="/"><BrandMark inverse /></Link>
+            <p>Learn Together.<br /><span>Rise Together.</span></p>
+            <span className="ed-footer-free">FREE TO LEARN · FREE TO SHARE</span>
+          </div>
+          <div className="ed-footer-links">
+            <div><h2>Explore</h2><Link to="/search">Knowledge vault</Link><Link to="/pyqs">Previous-year papers</Link><Link to="/syllabus">Syllabus explorer</Link></div>
+            <div><h2>Join in</h2><Link to="/register">Share your notes</Link><Link to="/login">Student sign in</Link><Link to="/library">Your library</Link></div>
+            <div><h2>About</h2><Link to="/#about">Our story</Link><Link to="/#verification">Thoughtful verification</Link><Link to="/terms">Terms &amp; conditions</Link></div>
+            <div><h2>Privacy</h2><Link to="/advertising">Privacy &amp; advertising details</Link>{validContactEmail ? <a href={`mailto:${validContactEmail}`}>Contact EduRise</a> : <span className="ed-footer-coming-soon">Contact details coming soon</span>}</div>
+          </div>
+          <div className="ed-footer-social">
+            <span>PASS THE GOOD STUFF ON.</span>
+            <div aria-label="Share EduRise" className="ed-social-links">
+              <a aria-label="Share EduRise on LinkedIn" href={`https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`} rel="noreferrer" target="_blank">in</a>
+              <a aria-label="Share EduRise on X" href={`https://twitter.com/intent/tweet?text=${shareText}&url=${shareUrl}`} rel="noreferrer" target="_blank">𝕏</a>
+              <a aria-label="Share EduRise on WhatsApp" href={`https://wa.me/?text=${shareText}%20${shareUrl}`} rel="noreferrer" target="_blank">↗</a>
+            </div>
+          </div>
+        </div>
+        <div className="ed-footer-bottom">
+          <span>© {new Date().getFullYear()} EduRise. Made for students, by students.</span>
+          <span>Free to learn · Free to share</span>
+          <a href="#top">Back to the top ↑</a>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+export default function ApplicationLayout() {
+  const rootRef = useRef(null);
+  const { pathname } = useLocation();
+
+  useGSAP(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const main = rootRef.current?.querySelector(".ed-app-content");
+    if (!main) return;
+    gsap.fromTo(
+      main,
+      { autoAlpha: 0, y: 12 },
+      { autoAlpha: 1, y: 0, duration: 0.42, ease: "power2.out" },
+    );
+    const cards = new Set(main.querySelectorAll("[data-ed-animate], article"));
+    cards.forEach((card, index) => {
+      gsap.fromTo(
+        card,
+        { autoAlpha: 0, y: 14 },
+        {
+          autoAlpha: 1,
+          y: 0,
+          duration: 0.38,
+          delay: Math.min(index * 0.04, 0.2),
+          ease: "power2.out",
+          scrollTrigger: {
+            trigger: card,
+            start: "top 94%",
+            once: true,
+          },
+        },
+      );
+    });
+  }, { scope: rootRef, dependencies: [pathname], revertOnUpdate: true });
+
+  return (
+    <div className="ed-site ed-app-site" id="top" ref={rootRef}>
+      <SiteHeader />
+      <div className="ed-app-content"><Outlet /></div>
+      <SiteFooter />
+    </div>
+  );
+}

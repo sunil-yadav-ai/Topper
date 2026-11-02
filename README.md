@@ -17,7 +17,11 @@ password recovery, and private handwritten-note upload and OCR workflows.
 2. Set `MONGODB_URI` if needed and generate a private `JWT_SECRET` of at least
    32 characters (for example, `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`).
 3. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`,
-   `SMTP_PASSWORD`, and `EMAIL_FROM` for verification and password reset emails.
+   `SMTP_PASSWORD`, and `EMAIL_FROM` in `backend/.env` for verification and
+   password reset emails. Gmail defaults to `smtp.gmail.com:587` with STARTTLS;
+   use a Google App Password for `SMTP_PASSWORD`. Run
+   `npm run test-email --workspace=backend` to test SMTP connectivity without
+   sending an email.
 4. Copy `frontend/.env.example` to `frontend/.env` if the API is not at
    `http://localhost:5000/api`.
 5. Configure `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and

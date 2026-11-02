@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
 import NotificationBell from "../components/NotificationBell.jsx";
 import AdUnit from "../components/AdUnit.jsx";
+import { EmptyState, PageLoader } from "../components/PageState.jsx";
 
 const initialFilters = {
   q: "",
@@ -343,12 +344,11 @@ export default function ResourceSearchPage() {
             {error && <p className="mb-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700" role="alert">{error}</p>}
             {notice && <p className="mb-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700" role="status">{notice}</p>}
             {loading ? (
-              <p className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-600 shadow-sm">Searching approved resources…</p>
+              <PageLoader label="Searching approved resources…" />
             ) : resources.length === 0 ? (
-              <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-                <h2 className="font-bold text-ink">No approved resources found</h2>
-                <p className="mt-2 text-sm text-slate-500">Try another search or broaden your filters.</p>
-              </div>
+              <EmptyState icon="book" title="No approved resources found">
+                Try another search or broaden your filters.
+              </EmptyState>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {resources.map((resource) => (

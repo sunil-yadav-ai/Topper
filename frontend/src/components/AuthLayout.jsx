@@ -1,48 +1,59 @@
-import { Link } from "react-router-dom";
+import { useRef } from "react";
+import { useGSAP } from "@gsap/react";
+import { gsap } from "../lib/gsap.js";
+import { SiteFooter, SiteHeader } from "./SiteChrome.jsx";
+
+gsap.registerPlugin(useGSAP);
 
 export default function AuthLayout({ children, eyebrow, title, description }) {
+  const rootRef = useRef(null);
+
+  useGSAP(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    gsap.fromTo(
+      ".ed-auth-card",
+      { autoAlpha: 0, y: 22 },
+      { autoAlpha: 1, y: 0, duration: 0.7, ease: "power3.out" },
+    );
+    gsap.fromTo(
+      ".ed-auth-art-card",
+      { autoAlpha: 0, scale: 0.86, rotation: -7 },
+      { autoAlpha: 1, scale: 1, rotation: -3, duration: 0.65, delay: 0.2, ease: "back.out(1.5)" },
+    );
+  }, { scope: rootRef });
+
   return (
-    <main className="flex min-h-screen flex-col bg-gradient-to-br from-slate-50 via-white to-indigo-50/60 px-4 py-6 sm:px-6 sm:py-10">
-      <header className="mx-auto w-full max-w-6xl">
-        <Link className="inline-flex items-center rounded-xl text-xl font-extrabold tracking-tight text-ink" to="/">
-          Study<span className="text-brand">Share</span>
-        </Link>
-      </header>
-      <div className="mx-auto my-auto w-full max-w-6xl py-8 sm:py-10">
-        <div className="grid overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_32px_80px_-48px_rgba(30,41,59,0.35)] md:grid-cols-[0.9fr_1.1fr]">
-          <aside className="hidden flex-col justify-between bg-gradient-to-br from-ink via-[#1e2b61] to-indigo-800 p-10 text-white md:flex lg:p-14">
-            <div>
-              <p className="text-sm font-bold uppercase tracking-[0.18em] text-indigo-300">
-                StudyShare
-              </p>
-              <h2 className="mt-8 text-3xl font-bold leading-tight">
-                Your next great study session starts here.
-              </h2>
-              <p className="mt-4 leading-7 text-indigo-100/80">
-                Discover and share the academic resources that help your campus
-                community learn together.
-              </p>
+    <div className="ed-site ed-auth-site" id="top" ref={rootRef}>
+      <SiteHeader />
+
+      <main className="ed-auth-main">
+        <div aria-hidden="true" className="ed-auth-doodle ed-auth-doodle-one">✳</div>
+        <div aria-hidden="true" className="ed-auth-doodle ed-auth-doodle-two">✦</div>
+        <div className="ed-auth-card">
+          <aside className="ed-auth-story">
+            <div className="ed-auth-story-copy">
+              <span className="ed-auth-kicker"><i /> MADE FOR STUDENTS</span>
+              <h2>GOOD NOTES.<br /><span>GOOD PEOPLE.</span></h2>
+              <p>A little sharing goes a long way. Find your people, pass on what you know, and rise together.</p>
             </div>
-            <p className="text-sm text-indigo-200/70">
-              A learning community built for students.
-            </p>
+            <div className="ed-auth-art-card" aria-hidden="true">
+              <span>YOUR NEXT CHAPTER</span>
+              <strong>STARTS HERE <i>↗</i></strong>
+              <small>LEARN IT · SHARE IT</small>
+            </div>
+            <div className="ed-auth-proof"><i>✳</i> ALWAYS FREE TO LEARN</div>
           </aside>
-          <section className="p-6 sm:p-10 lg:p-14">
-            {eyebrow && (
-              <p className="text-sm font-bold uppercase tracking-[0.16em] text-brand">
-                {eyebrow}
-              </p>
-            )}
-            <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-ink">
-              {title}
-            </h1>
-            {description && (
-              <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
-            )}
-            <div className="mt-7">{children}</div>
+
+          <section aria-labelledby="auth-title" className="ed-auth-form-panel">
+            {eyebrow && <p className="ed-auth-eyebrow"><span />{eyebrow}</p>}
+            <h1 id="auth-title">{title}</h1>
+            {description && <p className="ed-auth-description">{description}</p>}
+            <div className="ed-auth-form-content">{children}</div>
           </section>
         </div>
-      </div>
-    </main>
+      </main>
+
+      <SiteFooter />
+    </div>
   );
 }

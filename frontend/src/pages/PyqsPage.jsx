@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
 import NotificationBell from "../components/NotificationBell.jsx";
 import AdUnit from "../components/AdUnit.jsx";
+import { PageLoader } from "../components/PageState.jsx";
 
 const initialFilters = {
   search: "",
@@ -287,8 +288,8 @@ export default function PyqsPage() {
       </header>
 
       <section className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-4 rounded-3xl border border-indigo-100 bg-gradient-to-br from-white via-white to-indigo-50 px-5 py-7 shadow-sm sm:mb-8 sm:px-8 sm:py-9">
-          <div className="min-w-0">
+        <div className="ed-pyq-hero relative mb-6 flex flex-wrap items-end justify-between gap-4 rounded-3xl border border-indigo-100 bg-gradient-to-br from-white via-white to-indigo-50 px-5 py-7 shadow-sm sm:mb-8 sm:px-8 sm:py-9" data-ed-animate>
+          <div className="ed-pyq-hero-copy min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand sm:text-sm">
               Free student resources
             </p>
@@ -302,6 +303,12 @@ export default function PyqsPage() {
           <p className="rounded-full bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-800 sm:text-sm">
             Always free · No paywall
           </p>
+          <svg aria-hidden="true" className="ed-pyq-hero-art" fill="none" viewBox="0 0 120 120">
+            <path d="M24 23h39l21 21v53H24z" fill="#fff9ec" stroke="currentColor" strokeLinejoin="round" strokeWidth="3" />
+            <path d="M63 23v22h21M37 60h34M37 69h34M37 78h25" stroke="currentColor" strokeLinecap="round" strokeWidth="3" />
+            <path d="m93 22 3 8 8 3-8 3-3 8-3-8-8-3 8-3 3-8Z" fill="#ff6b24" stroke="currentColor" strokeLinejoin="round" strokeWidth="2" />
+            <path d="m22 82 2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5Z" fill="#c8ea24" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.5" />
+          </svg>
         </div>
 
         {error && <p className="mb-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700" role="alert">{error}</p>}
@@ -382,7 +389,7 @@ export default function PyqsPage() {
         )}
 
         <div className="grid min-w-0 items-start gap-5 lg:grid-cols-[270px_minmax(0,1fr)] lg:gap-6">
-          <aside className="h-fit min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <aside className="ed-pyq-filter h-fit min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-bold text-ink">Find a paper</h2>
               {user?.role === "student" && (
@@ -456,7 +463,7 @@ export default function PyqsPage() {
 
           <section aria-label="Previous year question papers">
             <AdUnit className="mb-5" placement="pyqs" />
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <div className="ed-pyq-results-bar mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
               <p className="text-sm text-slate-600">
                 {bookmarksOnly ? `${pyqs.length} saved papers` : `${pagination.total} free papers`}
               </p>
@@ -467,16 +474,20 @@ export default function PyqsPage() {
               )}
             </div>
             {loading ? (
-              <p className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-600 shadow-sm">Loading papers…</p>
+              <div className="ed-pyq-loading"><PageLoader label="Loading papers…" /></div>
             ) : pyqs.length === 0 ? (
-              <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+              <div className="ed-pyq-empty rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm" data-ed-animate>
+                <svg aria-hidden="true" className="mx-auto mb-4 size-10 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 3.75h7l4 4v12.5H7a2 2 0 0 1-2-2v-12.5a2 2 0 0 1 2-2Z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14 3.75v4h4M8.5 12h7M8.5 15.5h7" />
+                </svg>
                 <h2 className="font-bold text-ink">No papers found</h2>
                 <p className="mt-2 text-sm text-slate-500">Try other search terms or filters. Every paper shared here is free.</p>
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {pyqs.map((pyq) => (
-                  <article className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md sm:p-5" key={pyq.id}>
+                  <article className="ed-pyq-card flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md sm:p-5" data-ed-animate key={pyq.id}>
                     <div className="flex items-start justify-between gap-3">
                       <span className="rounded-lg bg-rose-50 px-2.5 py-1 text-xs font-bold uppercase text-rose-700">PDF · Free</span>
                       <span className="rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-brand">

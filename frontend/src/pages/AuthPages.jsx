@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout.jsx";
 import FormField from "../components/FormField.jsx";
@@ -11,10 +11,10 @@ function FormAlert({ message, success = false }) {
 
   return (
     <p
-      className={`rounded-xl px-3.5 py-3 text-sm ${
+      className={`ed-auth-alert rounded-xl px-3.5 py-3 text-sm ${
         success
-          ? "bg-emerald-50 text-emerald-800"
-          : "bg-rose-50 text-rose-700"
+          ? "ed-auth-alert-success bg-emerald-50 text-emerald-800"
+          : "ed-auth-alert-error bg-rose-50 text-rose-700"
       }`}
       role="status"
     >
@@ -27,17 +27,20 @@ function useFormRequest() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
+  const [statusCode, setStatusCode] = useState(null);
 
-  async function submit(action) {
+  const submit = useCallback(async (action) => {
     setLoading(true);
     setMessage("");
     setSuccess(false);
+    setStatusCode(null);
     try {
       const result = await action();
       setMessage(result?.message ?? "");
       setSuccess(true);
       return result;
     } catch (error) {
+      setStatusCode(error.response?.status ?? null);
       setMessage(
         error.response?.data?.message ??
           error.message ??
@@ -47,21 +50,32 @@ function useFormRequest() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  return { loading, message, success, submit };
+  return { loading, message, success, statusCode, submit };
 }
 
 export function LoginPage({ admin = false }) {
   const { signIn } = useAuth();
   const navigate = useNavigate();
   const request = useFormRequest();
+  const [submittedEmail, setSubmittedEmail] = useState("");
 
   async function handleSubmit(event) {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
+    setSubmittedEmail(values.email);
     const user = await request.submit(() => signIn(values, admin));
     if (user) navigate(user.role === "admin" ? "/admin" : "/dashboard", { replace: true });
+  }
+
+  async function handleResendVerification() {
+    await request.submit(async () => {
+      const { data } = await api.post("/auth/resend-verification", {
+        email: submittedEmail,
+      });
+      return data;
+    });
   }
 
   const title = admin ? "Admin sign in" : "Welcome back";
@@ -77,7 +91,7 @@ export function LoginPage({ admin = false }) {
       }
     >
       <form className="space-y-4" onSubmit={handleSubmit}>
-        <FormAlert message={request.message} />
+        <FormAlert message={request.message} success={request.success} />
         <FormField
           label="Email"
           name="email"
@@ -104,12 +118,30 @@ export function LoginPage({ admin = false }) {
         <SubmitButton loading={request.loading}>Sign in</SubmitButton>
       </form>
       {!admin && (
-        <p className="mt-5 text-center text-sm text-slate-600">
-          New to StudyShare?{" "}
-          <Link className="font-semibold text-brand hover:underline" to="/register">
-            Create an account
-          </Link>
-        </p>
+        <>
+          {request.statusCode === 403 ? (
+            <SubmitButton
+              className="ed-auth-submit mt-4 inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold text-white"
+              type="button"
+              loading={request.loading}
+              onClick={handleResendVerification}
+            >
+              Resend verification email
+            </SubmitButton>
+          ) : (
+            <p className="mt-4 text-center text-sm">
+              <Link className="font-semibold text-brand hover:underline" to="/resend-verification">
+                Need to verify your email? Resend verification
+              </Link>
+            </p>
+          )}
+          <p className="mt-5 text-center text-sm text-slate-600">
+            New to StudyShare?{" "}
+            <Link className="font-semibold text-brand hover:underline" to="/register">
+              Create an account
+            </Link>
+          </p>
+        </>
       )}
       <p className="mt-4 text-center text-sm text-slate-500">
         {admin ? (
@@ -160,13 +192,11 @@ export function RegisterPage() {
         </p>
         <SubmitButton loading={request.loading}>Create account</SubmitButton>
       </form>
-      {request.success && (
-        <p className="mt-4 text-center text-sm">
-          <Link className="font-semibold text-brand hover:underline" to="/resend-verification">
-            Didn’t receive the email? Resend verification
-          </Link>
-        </p>
-      )}
+      <p className="mt-4 text-center text-sm">
+        <Link className="font-semibold text-brand hover:underline" to="/resend-verification">
+          Didn’t receive the email? Resend verification
+        </Link>
+      </p>
       <p className="mt-5 text-center text-sm text-slate-600">
         Already have an account?{" "}
         <Link className="font-semibold text-brand hover:underline" to="/login">Sign in</Link>
@@ -251,14 +281,21 @@ export function ResetPasswordPage() {
 export function VerifyEmailPage() {
   const [searchParams] = useSearchParams();
   const request = useFormRequest();
+  const verificationStarted = useRef(false);
   const token = searchParams.get("token");
 
-  async function handleVerify() {
+  const handleVerify = useCallback(async () => {
     await request.submit(async () => {
       const { data } = await api.post("/auth/verify-email", { token });
       return data;
     });
-  }
+  }, [request.submit, token]);
+
+  useEffect(() => {
+    if (!token || verificationStarted.current) return;
+    verificationStarted.current = true;
+    void handleVerify();
+  }, [handleVerify, token]);
 
   return (
     <AuthLayout
@@ -278,6 +315,11 @@ export function VerifyEmailPage() {
             <SubmitButton loading={request.loading} onClick={handleVerify} disabled={!token}>
               Verify email
             </SubmitButton>
+            <p className="text-center text-sm">
+              <Link className="font-semibold text-brand hover:underline" to="/resend-verification">
+                Request a new verification link
+              </Link>
+            </p>
           </>
         )}
         {request.success && (

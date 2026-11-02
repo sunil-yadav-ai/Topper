@@ -150,24 +150,65 @@ export async function verifyEmail(request, response) {
   const { token } = request.body ?? {};
   requireActionToken(token);
 
-  const user = await User.findOne({
-    emailVerificationTokenHash: hashActionToken(token),
-    emailVerificationExpiresAt: { $gt: new Date() },
-  }).select("+emailVerificationTokenHash +emailVerificationExpiresAt");
+  const tokenHash = hashActionToken(token);
+  const now = new Date();
+  const user = await User.findOneAndUpdate(
+    {
+      emailVerificationTokenHash: tokenHash,
+      emailVerificationExpiresAt: { $gt: now },
+    },
+    {
+      $set: { emailVerified: true },
+      $unset: {
+        emailVerificationTokenHash: "",
+        emailVerificationExpiresAt: "",
+      },
+    },
+    { new: true },
+  );
 
   if (!user) {
-    throw badRequest("This verification link is invalid or has expired.");
-  }
+    const expiredUser = await User.findOne({
+      emailVerificationTokenHash: tokenHash,
+    }).select("+emailVerificationExpiresAt");
 
-  user.emailVerified = true;
-  user.emailVerificationTokenHash = undefined;
-  user.emailVerificationExpiresAt = undefined;
-  await user.save();
+    if (expiredUser?.emailVerificationExpiresAt <= now) {
+      throw badRequest(
+        "This verification link has expired. Request a new verification email and try again.",
+      );
+    }
+
+    throw badRequest("This verification link is invalid or has already been used.");
+  }
 
   response.json({
     status: "success",
     message: "Email verified. You can now sign in.",
   });
+}
+
+async function restoreVerificationToken(user, tokenHash, previousTokenHash, previousExpiresAt) {
+  const update = { $set: {}, $unset: {} };
+
+  if (previousTokenHash) {
+    update.$set.emailVerificationTokenHash = previousTokenHash;
+  } else {
+    update.$unset.emailVerificationTokenHash = "";
+  }
+
+  if (previousExpiresAt) {
+    update.$set.emailVerificationExpiresAt = previousExpiresAt;
+  } else {
+    update.$unset.emailVerificationExpiresAt = "";
+  }
+
+  if (Object.keys(update.$set).length === 0) delete update.$set;
+  if (Object.keys(update.$unset).length === 0) delete update.$unset;
+
+  await User.updateOne(
+    { _id: user._id, emailVerificationTokenHash: tokenHash },
+    update,
+  );
 }
 
 export async function resendVerificationEmail(request, response) {
@@ -176,13 +217,38 @@ export async function resendVerificationEmail(request, response) {
     throw badRequest("Email is required.");
   }
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email }).select(
+    "+emailVerificationTokenHash +emailVerificationExpiresAt",
+  );
+
   if (user && !user.emailVerified) {
     const token = createActionToken();
-    user.emailVerificationTokenHash = hashActionToken(token);
+    const tokenHash = hashActionToken(token);
+    const previousTokenHash = user.emailVerificationTokenHash;
+    const previousExpiresAt = user.emailVerificationExpiresAt;
+
+    user.emailVerificationTokenHash = tokenHash;
     user.emailVerificationExpiresAt = new Date(Date.now() + actionTokenLifetimeMs);
     await user.save();
-    await deliverVerificationEmail(user, token);
+
+    try {
+      await deliverVerificationEmail(user, token);
+    } catch (deliveryError) {
+      try {
+        await restoreVerificationToken(
+          user,
+          tokenHash,
+          previousTokenHash,
+          previousExpiresAt,
+        );
+      } catch (restoreError) {
+        throw new AggregateError(
+          [deliveryError, restoreError],
+          "Verification email delivery failed and the previous token could not be restored.",
+        );
+      }
+      throw deliveryError;
+    }
   }
 
   response.json({

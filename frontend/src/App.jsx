@@ -4,6 +4,8 @@ import "lenis/dist/lenis.css";
 import Panel from "./components/Panel.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
 import { api } from "./lib/api.js";
+import ApplicationLayout from "./components/SiteChrome.jsx";
+import { PageLoader } from "./components/PageState.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import AdminDashboardPage from "./pages/AdminDashboardPage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
@@ -47,13 +49,17 @@ export default function App() {
           </Suspense>
         )}
       />
-      <Route path="/pyqs" element={<PyqsPage />} />
-      <Route path="/search" element={<ResourceSearchPage />} />
-      <Route path="/advertising" element={<AdvertisingDisclosurePage />} />
-      <Route path="/terms" element={<TermsPage />} />
-      <Route path="/library" element={<ProtectedPage><LibraryPage /></ProtectedPage>} />
-      <Route path="/notifications" element={<AuthenticatedPage><NotificationsPage /></AuthenticatedPage>} />
-      <Route path="/syllabus" element={<ProtectedPage><SyllabusAnalysisPage /></ProtectedPage>} />
+      <Route element={<ApplicationLayout />}>
+        <Route path="/pyqs" element={<PyqsPage />} />
+        <Route path="/search" element={<ResourceSearchPage />} />
+        <Route path="/advertising" element={<AdvertisingDisclosurePage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/library" element={<ProtectedPage><LibraryPage /></ProtectedPage>} />
+        <Route path="/notifications" element={<AuthenticatedPage><NotificationsPage /></AuthenticatedPage>} />
+        <Route path="/syllabus" element={<ProtectedPage><SyllabusAnalysisPage /></ProtectedPage>} />
+        <Route path="/dashboard" element={<ProtectedPage><DashboardPage /></ProtectedPage>} />
+        <Route path="/admin" element={<ProtectedPage admin><AdminDashboardPage /></ProtectedPage>} />
+      </Route>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/admin/login" element={<LoginPage admin />} />
       <Route path="/register" element={<RegisterPage />} />
@@ -61,8 +67,6 @@ export default function App() {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/resend-verification" element={<ResendVerificationPage />} />
-      <Route path="/dashboard" element={<ProtectedPage><DashboardPage /></ProtectedPage>} />
-      <Route path="/admin" element={<ProtectedPage admin><AdminDashboardPage /></ProtectedPage>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
@@ -72,10 +76,10 @@ function ProtectedPage({ children, admin = false }) {
   const { user, loading, authError } = useAuth();
 
   if (loading) {
-    return <p className="grid min-h-screen place-items-center text-slate-600">Loading your account…</p>;
+    return <PageLoader label="Loading your account…" />;
   }
   if (authError) {
-    return <p className="grid min-h-screen place-items-center px-5 text-center text-rose-700">{authError}</p>;
+    return <p className="ed-page-error grid min-h-screen place-items-center px-5 text-center" role="alert">{authError}</p>;
   }
   if (!user) {
     return <Navigate to={admin ? "/admin/login" : "/login"} replace />;
@@ -90,10 +94,10 @@ function ProtectedPage({ children, admin = false }) {
 function AuthenticatedPage({ children }) {
   const { user, loading, authError } = useAuth();
   if (loading) {
-    return <p className="grid min-h-screen place-items-center text-slate-600">Loading your account…</p>;
+    return <PageLoader label="Loading your account…" />;
   }
   if (authError) {
-    return <p className="grid min-h-screen place-items-center px-5 text-center text-rose-700">{authError}</p>;
+    return <p className="ed-page-error grid min-h-screen place-items-center px-5 text-center" role="alert">{authError}</p>;
   }
   if (!user) {
     return <Navigate to="/login" replace />;

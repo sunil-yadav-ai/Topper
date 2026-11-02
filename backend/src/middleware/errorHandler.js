@@ -43,11 +43,20 @@ export function errorHandler(error, request, response, _next) {
   }
 
   if (statusCode >= 500) {
-    console.error(error);
+    if (typeof error.code === "string" && error.code.startsWith("EMAIL_")) {
+      console.error(`[${error.code}] ${error.message}`);
+    } else {
+      console.error(error);
+    }
   }
 
   response.status(statusCode).json({
     status: "error",
-    message: statusCode >= 500 ? "Internal server error" : error.message,
+    message:
+      error.expose === true
+        ? error.message
+        : statusCode >= 500
+          ? "Internal server error"
+          : error.message,
   });
 }
