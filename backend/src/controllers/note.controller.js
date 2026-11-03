@@ -7,7 +7,6 @@ import NoteOcrResult from "../models/NoteOcrResult.js";
 import NoteVerificationHistory from "../models/NoteVerificationHistory.js";
 import NoteVerificationJob from "../models/NoteVerificationJob.js";
 import NoteVerificationResult from "../models/NoteVerificationResult.js";
-import NoteDecisionNotification from "../models/NoteDecisionNotification.js";
 import Notification from "../models/Notification.js";
 import Bookmark from "../models/Bookmark.js";
 import StudentResourceAccess from "../models/StudentResourceAccess.js";
@@ -25,6 +24,7 @@ import {
   recordResourceAccess,
 } from "../services/student-library.service.js";
 import { createNotification } from "../services/notification.service.js";
+import { sendResourceUploadEmail } from "../services/email-notification.service.js";
 
 const maxFileSize = 10 * 1024 * 1024;
 const upload = multer({
@@ -126,6 +126,7 @@ export async function createNote(request, response) {
     file: request.file,
     format: fileInfo.format,
     uploadedBy: request.user._id,
+    uploader: request.user,
   });
 
   response.status(201).json({
@@ -140,6 +141,7 @@ async function createNoteSubmission({
   file,
   format,
   uploadedBy,
+  uploader,
   revisionOf = null,
   revisionRoot = null,
   revisionNumber = 1,
@@ -191,6 +193,18 @@ async function createNoteSubmission({
     }
     throw error;
   }
+
+  await sendResourceUploadEmail({
+    Model: Note,
+    resourceId: note._id.toString(),
+    recipientEmail: uploader.email,
+    studentName: uploader.fullName,
+    resourceName: note.title,
+    category: "Handwritten notes and study materials",
+    status: "Successfully uploaded; queued for verification",
+    uploadedAt: note.createdAt,
+  });
+
   return note;
 }
 
@@ -243,6 +257,7 @@ export async function resubmitCorrectedNote(request, response) {
     file: request.file,
     format: fileInfo.format,
     uploadedBy: request.user._id,
+    uploader: request.user,
     revisionOf: parent._id,
     revisionRoot: rootId,
     revisionNumber: (latest?.revisionNumber ?? parent.revisionNumber ?? 1) + 1,
@@ -481,7 +496,6 @@ export async function deleteMyNote(request, response) {
     NoteVerificationJob.deleteOne({ note: note._id }),
     NoteVerificationResult.deleteOne({ note: note._id }),
     NoteVerificationHistory.deleteMany({ note: note._id }),
-    NoteDecisionNotification.deleteOne({ note: note._id }),
     removeCommunityReportNotifications(note._id),
     Bookmark.deleteMany({ resourceType: "note", resource: note._id }),
     StudentResourceAccess.deleteMany({

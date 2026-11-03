@@ -11,7 +11,7 @@ import { requireAuth, requireRole } from "../middleware/auth.middleware.js";
 
 const syllabusAnalysisRouter = Router();
 
-syllabusAnalysisRouter.use(requireAuth, requireRole("student"));
+syllabusAnalysisRouter.use(requireAuth, requireRole("user"));
 syllabusAnalysisRouter.get("/", listSyllabusAnalyses);
 syllabusAnalysisRouter.post("/", receiveSyllabusFile, uploadSyllabus);
 syllabusAnalysisRouter.get("/:analysisId", getSyllabusAnalysis);

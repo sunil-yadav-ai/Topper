@@ -17,42 +17,40 @@ import {
   respondToNoteCommunityReport,
   reviewNoteCommunityReport,
 } from "../controllers/note-community.controller.js";
-import { requireAuth, requireRole } from "../middleware/auth.middleware.js";
+import { isAdmin, requireAuth, requireRole } from "../middleware/auth.middleware.js";
 
 const noteRouter = Router();
 
 noteRouter.get(
   "/reports/review",
-  requireAuth,
-  requireRole("admin"),
+  isAdmin,
   getCommunityReportsForReview,
 );
 noteRouter.patch(
   "/reports/:reportId/review",
-  requireAuth,
-  requireRole("admin"),
+  isAdmin,
   reviewNoteCommunityReport,
 );
 noteRouter.get(
   "/reports",
   requireAuth,
-  requireRole("student"),
+  requireRole("user"),
   getMyNoteCommunityReports,
 );
 noteRouter.post(
   "/:noteId/reports",
   requireAuth,
-  requireRole("student"),
+  requireRole("user"),
   createNoteCommunityReport,
 );
 noteRouter.post(
   "/reports/:reportId/response",
   requireAuth,
-  requireRole("student"),
+  requireRole("user"),
   respondToNoteCommunityReport,
 );
 
-noteRouter.use(requireAuth, requireRole("student"));
+noteRouter.use(requireAuth, requireRole("user"));
 noteRouter.get("/published", getPublishedNotes);
 noteRouter.get("/", getMyNotes);
 noteRouter.post("/", receiveNoteFile, createNote);

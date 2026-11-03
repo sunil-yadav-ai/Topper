@@ -936,9 +936,14 @@ export default function EduRiseLanding() {
             <a href="#verification" onClick={() => setMenuOpen(false)}>How we check</a>
             <a href="#contributors" onClick={() => setMenuOpen(false)}>Our people</a>
             <Link to="/pyqs" onClick={() => setMenuOpen(false)}>Free PYQs</Link>
+            {user?.username && (
+              <Link to={`/profile/${encodeURIComponent(user.username)}`} onClick={() => setMenuOpen(false)}>
+                My profile
+              </Link>
+            )}
             {user && <NotificationBell />}
             <Link className="ed-nav-cta" to={dashboardPath} onClick={() => setMenuOpen(false)}>
-              {user ? "My dashboard" : "Join for free"} <Arrow />
+              {user?.role === "admin" ? "Admin Dashboard" : user ? "My dashboard" : "Join for free"} <Arrow />
             </Link>
           </nav>
         </div>

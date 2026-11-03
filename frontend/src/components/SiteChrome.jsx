@@ -68,6 +68,7 @@ export function SiteHeader() {
           <Link to="/pyqs">Free PYQs</Link>
           {user ? (
             <>
+              {user.username && <Link to={`/profile/${encodeURIComponent(user.username)}`}>My profile</Link>}
               <Link to="/library">My library</Link>
               <NotificationBell />
               <button className="ed-nav-signout" onClick={handleSignOut} type="button">Sign out</button>
@@ -76,7 +77,7 @@ export function SiteHeader() {
             <Link to="/login">Student sign in</Link>
           )}
           <Link className="ed-nav-cta" to={dashboardPath}>
-            {user ? "My dashboard" : "Join for free"}
+            {user?.role === "admin" ? "Admin Dashboard" : user ? "My dashboard" : "Join for free"}
             <span aria-hidden="true" className="ed-arrow">→</span>
           </Link>
         </nav>

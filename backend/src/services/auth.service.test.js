@@ -6,21 +6,22 @@ const {
   createActionToken,
   getAuthCookieOptions,
   hashActionToken,
+  legacyAuthCookiePath,
   signAuthToken,
   validatePassword,
   verifyAuthToken,
 } = await import("./auth.service.js");
 
-test("signs short-lived authentication tokens with the current user version", () => {
+test("signs short-lived tokens with the current user version but no role claim", () => {
   const token = signAuthToken({
     id: "student-123",
-    role: "student",
+    role: "user",
     authVersion: 4,
   });
   const payload = verifyAuthToken(token);
 
   assert.equal(payload.sub, "student-123");
-  assert.equal(payload.role, "student");
+  assert.equal(Object.hasOwn(payload, "role"), false);
   assert.equal(payload.ver, 4);
   assert.equal(payload.exp - payload.iat, 24 * 60 * 60);
   assert.throws(() => verifyAuthToken(`${token.slice(0, -1)}x`));
@@ -44,5 +45,6 @@ test("enforces bcrypt's UTF-8 byte limit and secure cookie attributes", () => {
   const cookie = getAuthCookieOptions();
   assert.equal(cookie.httpOnly, true);
   assert.equal(cookie.sameSite, "lax");
-  assert.equal(cookie.path, "/api/auth");
+  assert.equal(cookie.path, "/api");
+  assert.equal(legacyAuthCookiePath, "/api/auth");
 });

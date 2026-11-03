@@ -78,13 +78,14 @@ function getTransporter() {
   return transporter;
 }
 
-export async function sendActionEmail({ to, subject, text }) {
+export async function sendActionEmail({ to, subject, text, html }) {
   try {
     await getTransporter().sendMail({
       from: env.emailFrom,
       to,
       subject,
       text,
+      html,
     });
   } catch (error) {
     if (isEmailError(error)) throw error;

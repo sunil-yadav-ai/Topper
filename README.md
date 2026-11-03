@@ -2,8 +2,9 @@
 
 This repository contains a MERN starter with independent `frontend` and
 `backend` workspaces. It includes a Vite/React UI, Tailwind CSS, an Express API,
-MongoDB/Mongoose, student and admin authentication, email verification,
-password recovery, and private handwritten-note upload and OCR workflows.
+MongoDB/Mongoose, student and admin authentication, Nodemailer email
+notifications, password recovery, and private handwritten-note upload and OCR
+workflows.
 
 ## Requirements
 
@@ -17,9 +18,9 @@ password recovery, and private handwritten-note upload and OCR workflows.
 2. Set `MONGODB_URI` if needed and generate a private `JWT_SECRET` of at least
    32 characters (for example, `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`).
 3. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`,
-   `SMTP_PASSWORD`, and `EMAIL_FROM` in `backend/.env` for verification and
-   password reset emails. Gmail defaults to `smtp.gmail.com:587` with STARTTLS;
-   use a Google App Password for `SMTP_PASSWORD`. Run
+   `SMTP_PASSWORD`, and `EMAIL_FROM` in `backend/.env` for email notifications.
+   Gmail defaults to `smtp.gmail.com:587` with STARTTLS; use a Google App
+   Password for `SMTP_PASSWORD`. Run
    `npm run test-email --workspace=backend` to test SMTP connectivity without
    sending an email.
 4. Copy `frontend/.env.example` to `frontend/.env` if the API is not at
@@ -29,8 +30,7 @@ password recovery, and private handwritten-note upload and OCR workflows.
 6. Configure `OPENAI_API_KEY` for vision OCR, and set `OCR_ENCRYPTION_KEY` to a
    new random 32-byte base64 or 64-character hexadecimal key. Generate a base64
    key with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.
-7. Configure SMTP settings above to email students their decision, and set
-   `MIN_VERIFIABLE_STATEMENTS` if the default minimum of five should change.
+7. Set `MIN_VERIFIABLE_STATEMENTS` if the default minimum of five should change.
 8. Run `npm install` from the repository root.
 9. Run `npm run dev` to start the API and frontend together.
 
@@ -42,10 +42,28 @@ database readiness. Use `npm run build` to build the frontend.
 
 - Students register at `/register` with their academic profile. Student
   registration is the only public registration path; it never accepts a role.
+- User roles are stored in MongoDB as `user` or `admin`; new accounts default
+  to `user`, and registration/profile requests cannot set a role. On database
+  connection, existing `student` role values are migrated to `user` without
+  deleting accounts. To promote an account manually, change its `role` to
+  `admin` in MongoDB Atlas or Compass. Admin authorization reloads the current
+  database role for every protected API request, so changing a role takes
+  effect immediately on the backend; reload or sign in again to refresh the
+  frontend session view.
+- Registered users have a unique public username and profile at
+  `/profile/:username`. Public profiles show academic details and approved
+  contributions only; email and password are never included. Profile changes
+  use authenticated `PATCH /api/profiles/me` and cannot change roles. Existing
+  accounts are assigned usernames when MongoDB connects. Profiles use initials
+  when no photo is set. Owners may upload a JPG, PNG, or WebP profile photo
+  (maximum 5 MB) through the same authenticated profile update endpoint; images
+  are stored in the configured Cloudinary account.
+- Email verification is optional and is not required to register or sign in.
 - `/login` is for students; `/admin/login` is for provisioned administrators.
 - Authenticated sessions use a signed JWT in an HttpOnly, SameSite cookie.
-  Passwords are bcrypt-hashed. Verification and password-reset links are
-  single-use, hashed in MongoDB, and expire after one hour.
+  Passwords are bcrypt-hashed. Optional verification and password-reset links
+  are single-use, hashed in MongoDB, and expire after one hour. Transactional
+  email is sent by the backend Nodemailer service.
 - Provision an initial admin by temporarily setting `ADMIN_NAME`, `ADMIN_EMAIL`,
   and `ADMIN_PASSWORD` in `backend/.env`, then running
   `npm run create-admin --workspace=backend`. The command refuses to change an
@@ -61,7 +79,7 @@ database readiness. Use `npm run build` to build the frontend.
 
 ## Student dashboard data
 
-- `GET /api/dashboard` requires a verified student session and returns the
+- `GET /api/dashboard` requires an authenticated student session and returns the
   current MongoDB profile, contribution counts, saved approved resources, and
   recent activity. Counts are aggregated from `Resource` documents owned by
   that student; there are no seeded or placeholder statistics.
@@ -86,6 +104,9 @@ database readiness. Use `npm run build` to build the frontend.
   `GET /api/notes/:noteId/file` returns a short-lived private download, and
   `DELETE /api/notes/:noteId` deletes only that student's note.
 - Files are signature-checked and stored as authenticated Cloudinary assets.
+  After the resource is saved, the backend sends the uploader an email
+  confirmation through Nodemailer. Email delivery failures are logged and do
+  not undo or fail a successful upload.
   Each upload creates a `Note` with private publication status and a
   `NoteVerificationJob` of type `ai_handwritten_note` in the durable queued
   state. The note is not published by the upload flow. OCR completes before
@@ -122,9 +143,10 @@ database readiness. Use `npm run build` to build the frontend.
 - Approved notes and notes approved with warnings are published after
   verification. Rejected, pending, and human-review notes remain private.
   Authenticated students can discover published notes at `GET /api/notes/published`.
-  Students receive an email decision; delivery is retried through a durable
-  notification queue. Owners can resubmit a corrected file for a rejected
-  note at `POST /api/notes/:noteId/resubmissions`; this creates a new revision
+  Students receive a direct Nodemailer email decision after verification;
+  email delivery failures are logged and do not undo the decision. Owners can
+  resubmit a corrected file for a rejected note at
+  `POST /api/notes/:noteId/resubmissions`; this creates a new revision
   and restarts OCR and verification. Original versions remain unchanged.
   Encrypted decision reports and revision history are available from the
   owner's verification endpoint and dashboard.
@@ -133,13 +155,16 @@ database readiness. Use `npm run build` to build the frontend.
 
 - `/pyqs` provides public, free browsing, filtering by semester, subject,
   and examination year, and direct PDF downloads. Uploading, bookmarking, and
-  reporting require a verified student session.
+  reporting require an authenticated student session.
 - Students upload papers from `/pyqs` with university, college, department,
   course, semester, subject, examination year, exam type, and a PDF file
   (maximum 20 MB). PDFs are signature-checked and stored as authenticated
   Cloudinary assets using the existing Cloudinary configuration. Each paper
   records its original uploader and stays private until an administrator
   approves it. Approved downloads use short-lived signed URLs.
+- After MongoDB saves a paper, the backend sends the uploader a confirmation
+  email through Nodemailer. Email delivery failures do not undo or fail the
+  successful upload.
 - The API includes `GET /api/pyqs`, `GET /api/pyqs/:pyqId/download`,
   `POST /api/pyqs`, `GET /api/pyqs/bookmarks`,
   `POST`/`DELETE /api/pyqs/:pyqId/bookmark`, and
@@ -207,7 +232,8 @@ database readiness. Use `npm run build` to build the frontend.
   confirm or dismiss them with
   `PATCH /api/notes/reports/:reportId/review`. Status changes, responses, and
   review notes are retained in the report's correction history. Email
-  notifications are delivered through a MongoDB-backed retry queue.
+  notifications are sent directly through Nodemailer after each operation is
+  saved; email failures are logged without undoing the saved operation.
 - Submitting a report does not modify a note, approval decision, or contributor
   points. No contributor-point adjustment is made by this workflow after
   review either; confirming a report only records the reviewed outcome and
@@ -236,7 +262,7 @@ database readiness. Use `npm run build` to build the frontend.
 - Students can review point balances, contribution records, reward transactions,
   the points schedule, available platform points, and the contributor
   leaderboard in their dashboard. APIs are `GET /api/rewards/me` and
-  `GET /api/rewards/leaderboard`; both require a verified student session.
+  `GET /api/rewards/leaderboard`; both require an authenticated student session.
   Student and admin history APIs accept a `page` query parameter for older
   transaction and contribution records.
 - Points are credited only after academic verification or moderation:

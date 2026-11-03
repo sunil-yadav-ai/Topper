@@ -9,7 +9,7 @@ import { requireAuth, requireRole } from "../middleware/auth.middleware.js";
 
 const dashboardRouter = Router();
 
-dashboardRouter.use(requireAuth, requireRole("student"));
+dashboardRouter.use(requireAuth, requireRole("user"));
 dashboardRouter.get("/", getStudentDashboard);
 dashboardRouter.patch("/profile", updateStudentProfile);
 dashboardRouter.post("/saved-resources/:resourceId", saveStudentResource);

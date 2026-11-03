@@ -8,7 +8,7 @@ import {
 } from "../services/student-library.service.js";
 
 export async function searchResourceCollection(request, response) {
-  if (request.user?.role === "student") {
+  if (request.user?.role === "user") {
     await migrateLegacyPyqBookmarks(request.user._id);
   }
   const result = await searchResources(request.query, request.user?._id);
@@ -53,7 +53,7 @@ export async function downloadApprovedNote(request, response) {
     error.statusCode = 404;
     throw error;
   }
-  if (request.user?.role === "student") {
+  if (request.user?.role === "user") {
     await recordResourceAccess({
       userId: request.user._id,
       resourceType: "note",

@@ -4,7 +4,6 @@ import NoteOcrResult from "../models/NoteOcrResult.js";
 import NoteVerificationJob from "../models/NoteVerificationJob.js";
 import NoteVerificationHistory from "../models/NoteVerificationHistory.js";
 import NoteVerificationResult from "../models/NoteVerificationResult.js";
-import NoteDecisionNotification from "../models/NoteDecisionNotification.js";
 import { createNotification } from "./notification.service.js";
 import {
   encryptOcrResult,
@@ -13,8 +12,7 @@ import {
 import { decryptJson, encryptJson } from "./encrypted-json.service.js";
 import { verifyAcademicNotes } from "./note-verification.service.js";
 import { decideNoteApproval } from "./note-approval.service.js";
-import { processNoteDecisionNotification } from "./note-decision-notification.service.js";
-import { processCommunityReportNotification } from "./note-community-notification.service.js";
+import { sendNoteDecisionEmail } from "./note-decision-notification.service.js";
 import { awardContribution } from "./reward.service.js";
 
 const maxAttempts = 3;
@@ -90,11 +88,6 @@ async function finalizeVerification({ note, job, report, model }) {
     job.updateOne({
       $set: { status: "completed", leaseAt: null, lastError: "" },
     }),
-    NoteDecisionNotification.findOneAndUpdate(
-      { note: note._id },
-      { $setOnInsert: { note: note._id, status: "queued" } },
-      { upsert: true, new: true, runValidators: true },
-    ),
   ]);
   const notificationKey = `note-decision:ai:${note._id}`;
   const notifications = [];
@@ -171,6 +164,7 @@ async function finalizeVerification({ note, job, report, model }) {
       console.error(`Could not reward the uploader of approved note ${note._id}:`, error);
     }
   }
+  await sendNoteDecisionEmail(note._id);
 }
 
 async function processNextOcrJob() {
@@ -412,8 +406,6 @@ export function startNoteOcrWorker() {
     try {
       await processNextOcrJob();
       await processNextVerificationJob();
-      await processNoteDecisionNotification();
-      await processCommunityReportNotification();
     } catch (error) {
       console.error("Note OCR worker failed to process its queue:", error);
     } finally {

@@ -118,7 +118,7 @@ export async function sendAdminAnnouncement(request, response) {
 
   const announcementId = new mongoose.Types.ObjectId();
   const recipients = User.find({
-    role: "student",
+    role: "user",
     isSuspended: { $ne: true },
   })
     .select("_id")

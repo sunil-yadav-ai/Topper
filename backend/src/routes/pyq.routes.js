@@ -12,6 +12,7 @@ import {
   uploadPyq,
 } from "../controllers/pyq.controller.js";
 import {
+  isAdmin,
   optionalAuth,
   requireAuth,
   requireRole,
@@ -21,41 +22,39 @@ const pyqRouter = Router();
 
 pyqRouter.get(
   "/review",
-  requireAuth,
-  requireRole("admin"),
+  isAdmin,
   getPyqsForReview,
 );
 pyqRouter.patch(
   "/:pyqId/approval",
-  requireAuth,
-  requireRole("admin"),
+  isAdmin,
   reviewPyq,
 );
 pyqRouter.get("/", optionalAuth, browsePyqs);
 pyqRouter.get("/:pyqId/download", optionalAuth, downloadPyq);
-pyqRouter.post("/", requireAuth, requireRole("student"), receivePyqPdf, uploadPyq);
+pyqRouter.post("/", requireAuth, requireRole("user"), receivePyqPdf, uploadPyq);
 pyqRouter.get(
   "/bookmarks",
   requireAuth,
-  requireRole("student"),
+  requireRole("user"),
   getMyBookmarks,
 );
 pyqRouter.post(
   "/:pyqId/bookmark",
   requireAuth,
-  requireRole("student"),
+  requireRole("user"),
   bookmarkPyq,
 );
 pyqRouter.delete(
   "/:pyqId/bookmark",
   requireAuth,
-  requireRole("student"),
+  requireRole("user"),
   removePyqBookmark,
 );
 pyqRouter.post(
   "/:pyqId/reports",
   requireAuth,
-  requireRole("student"),
+  requireRole("user"),
   reportPyq,
 );
 

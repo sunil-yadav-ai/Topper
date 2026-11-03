@@ -22,6 +22,7 @@ import {
   removeLibraryBookmarkByResource,
   saveLibraryBookmark,
 } from "../services/student-library.service.js";
+import { sendResourceUploadEmail } from "../services/email-notification.service.js";
 
 const maxFileSize = 20 * 1024 * 1024;
 const upload = multer({
@@ -81,6 +82,7 @@ function serializePyq(pyq, savedIds = new Set()) {
     helpfulCount: pyq.helpfulCount ?? 0,
     approvalStatus: pyq.approvalStatus ?? "pending",
     uploadedBy: pyq.uploadedBy?.fullName ?? "Student",
+    uploadedByUsername: pyq.uploadedBy?.username ?? null,
     isBookmarked: savedIds.has(pyq._id.toString()),
     createdAt: pyq.createdAt,
   };
@@ -137,12 +139,12 @@ export async function browsePyqs(request, response) {
     ];
   }
 
-  if (request.user?.role === "student") {
+  if (request.user?.role === "user") {
     await migrateLegacyPyqBookmarks(request.user._id);
   }
   const [pyqs, total, bookmarks] = await Promise.all([
     Pyq.find(filter)
-      .populate("uploadedBy", "fullName")
+      .populate("uploadedBy", "fullName username")
       .sort({ examinationYear: -1, createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
@@ -167,17 +169,13 @@ export async function uploadPyq(request, response) {
   validatePyqPdf(request.file);
   const fields = parsePyqMetadata(request.body);
   const storage = await uploadPyqPdf(request.file);
+  let pyq;
   try {
-    const pyq = await Pyq.create({
+    pyq = await Pyq.create({
       ...fields,
       fileName: basename(request.file.originalname),
       storage,
       uploadedBy: request.user._id,
-    });
-    response.status(201).json({
-      status: "success",
-      message: "Question paper submitted for approval before it appears publicly.",
-      pyq: serializePyq(pyq),
     });
   } catch (error) {
     try {
@@ -187,6 +185,23 @@ export async function uploadPyq(request, response) {
     }
     throw error;
   }
+
+  await sendResourceUploadEmail({
+    Model: Pyq,
+    resourceId: pyq._id.toString(),
+    recipientEmail: request.user.email,
+    studentName: request.user.fullName,
+    resourceName: `${pyq.subject} - ${pyq.examinationYear} ${pyq.examType} question paper`,
+    category: "Previous year question paper",
+    status: "Successfully uploaded; pending approval",
+    uploadedAt: pyq.createdAt,
+  });
+
+  response.status(201).json({
+    status: "success",
+    message: "Question paper submitted for approval before it appears publicly.",
+    pyq: serializePyq(pyq),
+  });
 }
 
 export async function downloadPyq(request, response) {
@@ -203,7 +218,7 @@ export async function downloadPyq(request, response) {
     error.statusCode = 404;
     throw error;
   }
-  if (request.user?.role === "student") {
+  if (request.user?.role === "user") {
     await recordResourceAccess({
       userId: request.user._id,
       resourceType: "pyq",

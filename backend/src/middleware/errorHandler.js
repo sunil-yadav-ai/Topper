@@ -7,6 +7,8 @@ export function notFoundHandler(request, _response, next) {
 export function errorHandler(error, request, response, _next) {
   const isSyllabusUpload =
     request?.originalUrl?.startsWith("/api/syllabus-analyses") ?? false;
+  const isProfilePhotoUpload =
+    request?.originalUrl?.startsWith("/api/profiles/me") ?? false;
   let statusCode = Number.isInteger(error.statusCode)
     ? error.statusCode
     : Number.isInteger(error.status)
@@ -17,6 +19,8 @@ export function errorHandler(error, request, response, _next) {
     statusCode = 413;
     error.message = isSyllabusUpload
       ? "Syllabus files must be 10 MB or smaller."
+      : isProfilePhotoUpload
+        ? "Profile photos must be 5 MB or smaller."
       : error.uploadKind === "pyq"
         ? "Question paper PDFs must be 20 MB or smaller."
         : "Note files must be 10 MB or smaller.";
@@ -24,6 +28,8 @@ export function errorHandler(error, request, response, _next) {
     statusCode = 400;
     error.message = isSyllabusUpload
       ? "Upload exactly one syllabus file."
+      : isProfilePhotoUpload
+        ? "Upload exactly one profile photo."
       : error.uploadKind === "pyq"
         ? "Upload exactly one question paper PDF."
         : "Upload exactly one note file.";

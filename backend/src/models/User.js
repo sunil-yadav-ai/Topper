@@ -29,6 +29,17 @@ const userSchema = new mongoose.Schema(
       maxlength: 254,
       match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Enter a valid email address."],
     },
+    username: {
+      type: String,
+      required: true,
+      trim: true,
+      lowercase: true,
+      minlength: 3,
+      maxlength: 30,
+      match: [/^[a-z0-9](?:[a-z0-9._]{1,28}[a-z0-9])$/, "Enter a valid username."],
+    },
+    bio: { type: String, trim: true, maxlength: 300, default: "" },
+    course: { type: String, trim: true, maxlength: 120, default: "" },
     password: {
       type: String,
       required: true,
@@ -38,9 +49,8 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["student", "admin"],
-      default: "student",
-      immutable: true,
+      enum: ["user", "admin"],
+      default: "user",
     },
     college: { type: String, required: true, trim: true, maxlength: 120 },
     university: { type: String, required: true, trim: true, maxlength: 120 },
@@ -69,6 +79,7 @@ const userSchema = new mongoose.Schema(
         message: "Profile picture URL must use HTTP or HTTPS.",
       },
     },
+    avatarPublicId: { type: String, select: false },
     savedResources: {
       type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Resource" }],
       default: [],
@@ -98,6 +109,10 @@ userSchema.pre("save", async function hashPassword() {
 userSchema.index({ university: 1 });
 userSchema.index({ college: 1 });
 userSchema.index({ batch: 1 });
+userSchema.index(
+  { username: 1 },
+  { unique: true, partialFilterExpression: { username: { $type: "string" } } },
+);
 
 userSchema.methods.comparePassword = function comparePassword(password) {
   return bcrypt.compare(password, this.password);
@@ -108,6 +123,9 @@ userSchema.methods.toSafeObject = function toSafeObject() {
     id: this.id,
     fullName: this.fullName,
     email: this.email,
+    username: this.username,
+    bio: this.bio,
+    course: this.course,
     role: this.role,
     college: this.college,
     university: this.university,

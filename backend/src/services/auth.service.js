@@ -3,7 +3,8 @@ import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
 
 export const authCookieName = "studyshare_token";
-export const authCookiePath = "/api/auth";
+export const authCookiePath = "/api";
+export const legacyAuthCookiePath = "/api/auth";
 export const authTokenLifetimeMs = 24 * 60 * 60 * 1000;
 
 export function hashActionToken(token) {
@@ -26,7 +27,7 @@ function getJwtSecret() {
 
 export function signAuthToken(user) {
   return jwt.sign(
-    { role: user.role, ver: user.authVersion },
+    { ver: user.authVersion },
     getJwtSecret(),
     { subject: user.id, expiresIn: "24h", algorithm: "HS256" },
   );

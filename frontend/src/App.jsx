@@ -15,6 +15,7 @@ import ResourceSearchPage from "./pages/ResourceSearchPage.jsx";
 import LibraryPage from "./pages/LibraryPage.jsx";
 import SyllabusAnalysisPage from "./pages/SyllabusAnalysisPage.jsx";
 import TermsPage from "./pages/TermsPage.jsx";
+import ProfilePage from "./pages/ProfilePage.jsx";
 import {
   ForgotPasswordPage,
   LoginPage,
@@ -58,6 +59,7 @@ export default function App() {
         <Route path="/notifications" element={<AuthenticatedPage><NotificationsPage /></AuthenticatedPage>} />
         <Route path="/syllabus" element={<ProtectedPage><SyllabusAnalysisPage /></ProtectedPage>} />
         <Route path="/dashboard" element={<ProtectedPage><DashboardPage /></ProtectedPage>} />
+        <Route path="/profile/:username" element={<ProfilePage />} />
         <Route path="/admin" element={<ProtectedPage admin><AdminDashboardPage /></ProtectedPage>} />
       </Route>
       <Route path="/login" element={<LoginPage />} />

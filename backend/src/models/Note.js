@@ -17,6 +17,13 @@ const noteSchema = new mongoose.Schema(
       index: true,
     },
     fileName: { type: String, required: true, maxlength: 255 },
+    emailNotificationStatus: {
+      type: String,
+      enum: ["pending", "sending", "sent", "failed"],
+      default: "pending",
+      select: false,
+    },
+    emailNotificationSentAt: { type: Date, default: null, select: false },
     downloadCount: { type: Number, default: 0, min: 0 },
     helpfulCount: { type: Number, default: 0, min: 0 },
     storage: {

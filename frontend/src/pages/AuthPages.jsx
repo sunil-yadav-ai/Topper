@@ -27,20 +27,17 @@ function useFormRequest() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
-  const [statusCode, setStatusCode] = useState(null);
 
   const submit = useCallback(async (action) => {
     setLoading(true);
     setMessage("");
     setSuccess(false);
-    setStatusCode(null);
     try {
       const result = await action();
       setMessage(result?.message ?? "");
       setSuccess(true);
       return result;
     } catch (error) {
-      setStatusCode(error.response?.status ?? null);
       setMessage(
         error.response?.data?.message ??
           error.message ??
@@ -52,30 +49,18 @@ function useFormRequest() {
     }
   }, []);
 
-  return { loading, message, success, statusCode, submit };
+  return { loading, message, success, submit };
 }
 
 export function LoginPage({ admin = false }) {
   const { signIn } = useAuth();
   const navigate = useNavigate();
   const request = useFormRequest();
-  const [submittedEmail, setSubmittedEmail] = useState("");
-
   async function handleSubmit(event) {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
-    setSubmittedEmail(values.email);
     const user = await request.submit(() => signIn(values, admin));
     if (user) navigate(user.role === "admin" ? "/admin" : "/dashboard", { replace: true });
-  }
-
-  async function handleResendVerification() {
-    await request.submit(async () => {
-      const { data } = await api.post("/auth/resend-verification", {
-        email: submittedEmail,
-      });
-      return data;
-    });
   }
 
   const title = admin ? "Admin sign in" : "Welcome back";
@@ -118,30 +103,12 @@ export function LoginPage({ admin = false }) {
         <SubmitButton loading={request.loading}>Sign in</SubmitButton>
       </form>
       {!admin && (
-        <>
-          {request.statusCode === 403 ? (
-            <SubmitButton
-              className="ed-auth-submit mt-4 inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold text-white"
-              type="button"
-              loading={request.loading}
-              onClick={handleResendVerification}
-            >
-              Resend verification email
-            </SubmitButton>
-          ) : (
-            <p className="mt-4 text-center text-sm">
-              <Link className="font-semibold text-brand hover:underline" to="/resend-verification">
-                Need to verify your email? Resend verification
-              </Link>
-            </p>
-          )}
-          <p className="mt-5 text-center text-sm text-slate-600">
-            New to StudyShare?{" "}
-            <Link className="font-semibold text-brand hover:underline" to="/register">
-              Create an account
-            </Link>
-          </p>
-        </>
+        <p className="mt-5 text-center text-sm text-slate-600">
+          New to StudyShare?{" "}
+          <Link className="font-semibold text-brand hover:underline" to="/register">
+            Create an account
+          </Link>
+        </p>
       )}
       <p className="mt-4 text-center text-sm text-slate-500">
         {admin ? (
@@ -187,16 +154,8 @@ export function RegisterPage() {
           <FormField label="Batch" name="batch" placeholder="e.g. 2024–2028" required />
           <FormField label="Semester" name="semester" type="number" min={1} max={12} required />
         </div>
-        <p className="text-xs leading-5 text-slate-500">
-          We’ll send you an email verification link before you can sign in.
-        </p>
         <SubmitButton loading={request.loading}>Create account</SubmitButton>
       </form>
-      <p className="mt-4 text-center text-sm">
-        <Link className="font-semibold text-brand hover:underline" to="/resend-verification">
-          Didn’t receive the email? Resend verification
-        </Link>
-      </p>
       <p className="mt-5 text-center text-sm text-slate-600">
         Already have an account?{" "}
         <Link className="font-semibold text-brand hover:underline" to="/login">Sign in</Link>

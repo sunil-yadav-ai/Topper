@@ -129,6 +129,12 @@ function asNote(note) {
     subject: note.subject,
     unit: note.unit,
     topic: note.topic,
+    uploader: note.uploadedBy
+      ? {
+          fullName: note.uploadedBy.fullName,
+          username: note.uploadedBy.username,
+        }
+      : null,
     fileFormat: note.storage.format,
     pageCount: note.ocrPageCount ?? 1,
     downloadCount: note.downloadCount ?? 0,
@@ -156,6 +162,12 @@ function asPyq(pyq) {
     downloadCount: pyq.downloadCount ?? 0,
     helpfulCount: pyq.helpfulCount ?? 0,
     examinationYear: pyq.examinationYear,
+    uploader: pyq.uploadedBy
+      ? {
+          fullName: pyq.uploadedBy.fullName,
+          username: pyq.uploadedBy.username,
+        }
+      : null,
     createdAt: pyq.createdAt,
     downloadUrl: `/pyqs/${pyq._id}/download`,
   };
@@ -180,14 +192,14 @@ export async function searchResources(query, userId = null) {
   const [notes, pyqs, noteCount, pyqCount] = await Promise.all([
     includeNotes
       ? Note.find(noteFilter)
-          .populate("uploadedBy", "university college batch")
+          .populate("uploadedBy", "university college batch fullName username")
           .sort(order)
           .limit(sourceLimit)
           .lean()
       : [],
     includePyqs
       ? Pyq.find(pyqFilter)
-          .populate("uploadedBy", "batch")
+          .populate("uploadedBy", "batch fullName username")
           .sort(order)
           .limit(sourceLimit)
           .lean()

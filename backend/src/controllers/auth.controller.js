@@ -7,9 +7,11 @@ import {
   getAuthCookieOptions,
   getClearCookieOptions,
   hashActionToken,
+  legacyAuthCookiePath,
   signAuthToken,
   validatePassword,
 } from "../services/auth.service.js";
+import { createUniqueUsername } from "../services/username.service.js";
 
 const actionTokenLifetimeMs = 60 * 60 * 1000;
 
@@ -79,25 +81,23 @@ export async function registerStudent(request, response) {
     throw badRequest("Password must be at least 8 characters and no more than 72 UTF-8 bytes.");
   }
 
-  const token = createActionToken();
-  const user = await User.create({
+  const username = await createUniqueUsername(User, fullName);
+  await User.create({
     fullName,
     email: normalizeEmail(email),
+    username,
     password,
     college,
     university,
     department,
     batch,
     semester: Number(semester),
-    role: "student",
-    emailVerificationTokenHash: hashActionToken(token),
-    emailVerificationExpiresAt: new Date(Date.now() + actionTokenLifetimeMs),
+    role: "user",
   });
 
-  await deliverVerificationEmail(user, token);
   response.status(201).json({
     status: "success",
-    message: "Account created. Check your email to verify your address before signing in.",
+    message: "Account created successfully. You can sign in now.",
   });
 }
 
@@ -119,18 +119,16 @@ async function authenticate(request, response, requiredRole) {
   if (user.isSuspended) {
     throw unauthorized("This account is suspended. Contact an administrator.");
   }
-  if (!user.emailVerified) {
-    const error = new Error("Verify your email address before signing in.");
-    error.statusCode = 403;
-    throw error;
-  }
-
+  response.clearCookie(authCookieName, {
+    ...getClearCookieOptions(),
+    path: legacyAuthCookiePath,
+  });
   response.cookie(authCookieName, signAuthToken(user), getAuthCookieOptions());
   response.json({ status: "success", user: user.toSafeObject() });
 }
 
 export async function loginStudent(request, response) {
-  await authenticate(request, response, "student");
+  await authenticate(request, response, "user");
 }
 
 export async function loginAdmin(request, response) {
@@ -138,11 +136,20 @@ export async function loginAdmin(request, response) {
 }
 
 export async function getCurrentUser(request, response) {
+  response.clearCookie(authCookieName, {
+    ...getClearCookieOptions(),
+    path: legacyAuthCookiePath,
+  });
+  response.cookie(authCookieName, signAuthToken(request.user), getAuthCookieOptions());
   response.json({ status: "success", user: request.user.toSafeObject() });
 }
 
 export function logout(request, response) {
   response.clearCookie(authCookieName, getClearCookieOptions());
+  response.clearCookie(authCookieName, {
+    ...getClearCookieOptions(),
+    path: legacyAuthCookiePath,
+  });
   response.json({ status: "success", message: "You have been signed out." });
 }
 
@@ -263,7 +270,7 @@ export async function forgotPassword(request, response) {
     throw badRequest("Email is required.");
   }
 
-  const user = await User.findOne({ email, emailVerified: true });
+  const user = await User.findOne({ email });
   if (user) {
     const token = createActionToken();
     user.passwordResetTokenHash = hashActionToken(token);
@@ -280,7 +287,7 @@ export async function forgotPassword(request, response) {
 
   response.json({
     status: "success",
-    message: "If a verified account exists for that email, password reset instructions have been sent.",
+    message: "If an account exists for that email, password reset instructions have been sent.",
   });
 }
 
@@ -294,7 +301,6 @@ export async function resetPassword(request, response) {
   const user = await User.findOne({
     passwordResetTokenHash: hashActionToken(token),
     passwordResetExpiresAt: { $gt: new Date() },
-    emailVerified: true,
   }).select("+passwordResetTokenHash +passwordResetExpiresAt +authVersion");
 
   if (!user) {

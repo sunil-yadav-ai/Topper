@@ -123,7 +123,7 @@ export default function ResourceSearchPage() {
   }
 
   async function voteHelpful(resource) {
-    if (!user || user.role !== "student") {
+    if (!user || user.role !== "user") {
       setNotice("Sign in with a student account to mark resources helpful.");
       return;
     }
@@ -151,7 +151,7 @@ export default function ResourceSearchPage() {
   }
 
   async function toggleBookmark(resource) {
-    if (!user || user.role !== "student") {
+    if (!user || user.role !== "user") {
       setNotice("Sign in with a student account to save resources to your library.");
       return;
     }
@@ -230,10 +230,10 @@ export default function ResourceSearchPage() {
           </Link>
           <nav className="flex w-full flex-wrap items-center gap-1 border-t border-slate-100 pt-2 sm:w-auto sm:justify-end sm:gap-2 sm:border-0 sm:pt-0">
             <Link className="rounded-xl px-3 py-2 text-sm font-semibold text-brand hover:bg-indigo-50" to="/pyqs">Free PYQs</Link>
-            {user?.role === "student" && <Link className="rounded-xl px-3 py-2 text-sm font-semibold text-brand hover:bg-indigo-50" to="/syllabus">Analyze syllabus</Link>}
+            {user?.role === "user" && <Link className="rounded-xl px-3 py-2 text-sm font-semibold text-brand hover:bg-indigo-50" to="/syllabus">Analyze syllabus</Link>}
             {user ? (
               <>
-                {user.role === "student" && <Link className="rounded-xl px-3 py-2 text-sm font-semibold text-brand hover:bg-indigo-50" to="/library">My library</Link>}
+                {user.role === "user" && <Link className="rounded-xl px-3 py-2 text-sm font-semibold text-brand hover:bg-indigo-50" to="/library">My library</Link>}
                 <Link className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" to={user.role === "admin" ? "/admin" : "/dashboard"}>Dashboard</Link>
               </>
             ) : (
@@ -366,6 +366,11 @@ export default function ResourceSearchPage() {
                       {resource.topic && <div><dt className="text-xs text-slate-500">Topic</dt><dd className="font-semibold text-slate-800">{resource.topic}</dd></div>}
                     </dl>
                     <p className="mt-3 line-clamp-1 text-xs text-slate-500">{[resource.department, resource.college, resource.university, resource.batch].filter(Boolean).join(" · ")}</p>
+                    {resource.uploader?.username && (
+                      <Link className="mt-2 w-fit text-xs font-semibold text-brand hover:underline" to={`/profile/${encodeURIComponent(resource.uploader.username)}`}>
+                        Shared by {resource.uploader.fullName}
+                      </Link>
+                    )}
                     <p className="mt-2 text-xs text-slate-400">{new Date(resource.createdAt).toLocaleDateString()} · {resource.helpfulCount} found helpful</p>
                     <div className="mt-auto flex flex-wrap items-center gap-2 pt-5">
                       {user ? (
@@ -373,7 +378,7 @@ export default function ResourceSearchPage() {
                       ) : (
                         <Link className="flex-1 rounded-xl bg-brand px-3 py-2.5 text-center text-sm font-bold text-white hover:bg-indigo-700" to="/login">Sign in to open</Link>
                       )}
-                      {user?.role === "student" && (
+                      {user?.role === "user" && (
                         <button
                           className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                           disabled={voting === resource.id || helpfulVotes.has(`${resource.type}:${resource.id}`)}
@@ -383,7 +388,7 @@ export default function ResourceSearchPage() {
                           {voting === resource.id ? "Saving…" : helpfulVotes.has(`${resource.type}:${resource.id}`) ? "Marked helpful" : "Helpful"}
                         </button>
                       )}
-                      {user?.role === "student" && (
+                      {user?.role === "user" && (
                         <button
                           className="rounded-xl border border-indigo-200 px-3 py-2.5 text-xs font-semibold text-brand hover:bg-indigo-50 disabled:opacity-50"
                           disabled={bookmarkingId === resource.id}
@@ -398,7 +403,7 @@ export default function ResourceSearchPage() {
                         </button>
                       )}
                       {resource.type === "note" && (
-                        user?.role === "student" ? (
+                        user?.role === "user" ? (
                           <button
                             className="rounded-xl border border-rose-200 px-3 py-2.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
                             onClick={() => {

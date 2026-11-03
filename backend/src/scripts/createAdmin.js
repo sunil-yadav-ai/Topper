@@ -2,6 +2,7 @@ import { connectDatabase } from "../config/database.js";
 import { env } from "../config/env.js";
 import User from "../models/User.js";
 import { validatePassword } from "../services/auth.service.js";
+import { createUniqueUsername } from "../services/username.service.js";
 
 const fullName = process.env.ADMIN_NAME?.trim();
 const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
@@ -24,6 +25,7 @@ if (!fullName || !email || !password) {
     await User.create({
       fullName,
       email,
+      username: await createUniqueUsername(User, fullName),
       password,
       role: "admin",
       college: "Administration",

@@ -23,7 +23,7 @@ resourceSearchRouter.get(
 resourceSearchRouter.post(
   "/:resourceType/:resourceId/helpful",
   requireAuth,
-  requireRole("student"),
+  requireRole("user"),
   markSearchResultHelpful,
 );
 

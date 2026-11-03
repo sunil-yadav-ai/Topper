@@ -1,9 +1,8 @@
 import mongoose from "mongoose";
 import Note from "../models/Note.js";
-import NoteCommunityNotification from "../models/NoteCommunityNotification.js";
 import NoteCommunityReport from "../models/NoteCommunityReport.js";
 import User from "../models/User.js";
-import { queueCommunityReportNotification } from "../services/note-community-notification.service.js";
+import { sendEmailSafely } from "../services/email-notification.service.js";
 import {
   awardContribution,
   isRewardableCorrectionCategory,
@@ -62,13 +61,23 @@ function serializeReport(report) {
   };
 }
 
-async function queueNotification(reportId, recipientId, subject, text) {
-  await queueCommunityReportNotification({
-    report: reportId,
-    recipient: recipientId,
-    subject,
-    text,
-  });
+async function notifyRecipient(reportId, recipientId, subject, text) {
+  try {
+    const recipient = await User.findById(recipientId).select("email");
+    if (!recipient) {
+      console.error(`Email recipient not found for community report ${reportId}.`);
+      return;
+    }
+    await sendEmailSafely({
+      id: `community-report-${reportId}-${recipientId}`,
+      to: recipient.email,
+      subject,
+      text,
+    });
+  } catch (error) {
+    const code = typeof error?.code === "string" ? error.code : "UNKNOWN";
+    console.error(`Could not prepare community report email (code: ${code}).`);
+  }
 }
 
 async function populateReportQuery(query) {
@@ -160,27 +169,22 @@ export async function createNoteCommunityReport(request, response) {
   }
 
   const reporter = await User.findById(request.user._id).select("fullName");
-  try {
-    await queueNotification(
-      report._id,
-      note.uploadedBy,
-      `A student reported an issue in "${note.title}"`,
-      [
-        `Hello,`,
-        "",
-        `${reporter?.fullName ?? "A student"} reported ${request.body.category.replaceAll("_", " ")} on page ${pageNumber}.`,
-        `Note: ${note.title}`,
-        `Details: ${explanation}`,
-        suggestedCorrection ? `Suggested correction: ${suggestedCorrection}` : "",
-        "Sign in to your StudyShare dashboard to review and respond.",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    );
-  } catch (error) {
-    console.error(`Could not queue notification for community report ${report._id}:`, error);
-    throw error;
-  }
+  await notifyRecipient(
+    report._id,
+    note.uploadedBy,
+    `A student reported an issue in "${note.title}"`,
+    [
+      `Hello,`,
+      "",
+      `${reporter?.fullName ?? "A student"} reported ${request.body.category.replaceAll("_", " ")} on page ${pageNumber}.`,
+      `Note: ${note.title}`,
+      `Details: ${explanation}`,
+      suggestedCorrection ? `Suggested correction: ${suggestedCorrection}` : "",
+      "Sign in to your StudyShare dashboard to review and respond.",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
   try {
     await createNotification({
       recipient: note.uploadedBy,
@@ -250,17 +254,12 @@ export async function respondToNoteCommunityReport(request, response) {
   });
   await report.save();
 
-  try {
-    await queueNotification(
-      report._id,
-      report.reportedBy,
-      `The uploader responded to your report on "${note.title}"`,
-      `The uploader responded to your page ${report.pageNumber} report:\n\n${responseText}\n\nThe report remains open for administrator review.`,
-    );
-  } catch (error) {
-    console.error(`Could not queue response notification for report ${report._id}:`, error);
-    throw error;
-  }
+  await notifyRecipient(
+    report._id,
+    report.reportedBy,
+    `The uploader responded to your report on "${note.title}"`,
+    `The uploader responded to your page ${report.pageNumber} report:\n\n${responseText}\n\nThe report remains open for administrator review.`,
+  );
 
   response.json({
     status: "success",
@@ -354,21 +353,16 @@ export async function reviewNoteCommunityReport(request, response) {
     .filter(Boolean)
     .join("\n");
   const recipients = [...new Set([report.reportedBy.toString(), note?.uploadedBy?.toString()].filter(Boolean))];
-  try {
-    await Promise.all(
-      recipients.map((recipient) =>
-        queueNotification(
-          report._id,
-          recipient,
-          `Community report ${decision}: ${note?.title ?? "published note"}`,
-          text,
-        ),
+  await Promise.all(
+    recipients.map((recipient) =>
+      notifyRecipient(
+        report._id,
+        recipient,
+        `Community report ${decision}: ${note?.title ?? "published note"}`,
+        text,
       ),
-    );
-  } catch (error) {
-    console.error(`Could not queue review notifications for report ${report._id}:`, error);
-    throw error;
-  }
+    ),
+  );
   try {
     await Promise.all(
       recipients.map((recipient) =>
@@ -405,11 +399,5 @@ export async function reviewNoteCommunityReport(request, response) {
 }
 
 export async function removeCommunityReportNotifications(noteId) {
-  const reports = await NoteCommunityReport.find({ note: noteId }).select("_id").lean();
-  await Promise.all([
-    NoteCommunityNotification.deleteMany({
-      report: { $in: reports.map((report) => report._id) },
-    }),
-    NoteCommunityReport.deleteMany({ note: noteId }),
-  ]);
+  await NoteCommunityReport.deleteMany({ note: noteId });
 }

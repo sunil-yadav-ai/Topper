@@ -126,7 +126,7 @@ export async function adjustStudentRewards(request, response) {
   }
   const student = await User.findOne({
     email: studentEmail.trim().toLowerCase(),
-    role: "student",
+    role: "user",
   }).select("_id fullName email");
   if (!student) {
     const error = new Error("Student account not found.");

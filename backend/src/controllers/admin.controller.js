@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 import Contribution from "../models/Contribution.js";
 import Note from "../models/Note.js";
 import NoteCommunityReport from "../models/NoteCommunityReport.js";
-import NoteDecisionNotification from "../models/NoteDecisionNotification.js";
 import { createNotification } from "../services/notification.service.js";
 import NoteOcrResult from "../models/NoteOcrResult.js";
 import NoteVerificationResult from "../models/NoteVerificationResult.js";
@@ -17,6 +16,7 @@ import {
   awardContribution,
   getRewardBudget,
 } from "../services/reward.service.js";
+import { sendNoteDecisionEmail } from "../services/note-decision-notification.service.js";
 
 const maximumPage = 10000;
 const pageLimit = 25;
@@ -88,7 +88,7 @@ export async function getAdminOverview(_request, response) {
     monthlyPyqReports,
     monthlyContributions,
   ] = await Promise.all([
-    User.countDocuments({ role: "student" }),
+    User.countDocuments({ role: "user" }),
     Note.countDocuments(),
     Pyq.countDocuments(),
     Note.countDocuments({
@@ -104,7 +104,7 @@ export async function getAdminOverview(_request, response) {
     NoteCommunityReport.countDocuments(),
     PyqReport.countDocuments(),
     getRewardBudget(),
-    monthlyCounts(User, "students", startDate, { role: "student" }),
+    monthlyCounts(User, "students", startDate, { role: "user" }),
     monthlyCounts(Note, "notes", startDate),
     monthlyCounts(Pyq, "pyqs", startDate),
     monthlyCounts(NoteCommunityReport, "noteReports", startDate),
@@ -151,7 +151,7 @@ export async function getAdminOverview(_request, response) {
       reportedResources: openNoteReports + openPyqReports,
       totalReports: totalNoteReports + totalPyqReports,
       activeStudents: await User.countDocuments({
-        role: "student",
+        role: "user",
         isSuspended: { $ne: true },
       }),
     },
@@ -312,27 +312,10 @@ export async function reviewAdminNote(request, response) {
     throw error;
   }
 
-  let notificationMessage = "";
-  try {
-    await NoteDecisionNotification.findOneAndUpdate(
-      { note: note._id },
-      {
-        $set: {
-          status: "queued",
-          attempts: 0,
-          leaseAt: null,
-          lastError: "",
-          sentAt: null,
-        },
-        $setOnInsert: { note: note._id },
-      },
-      { upsert: true, new: true, runValidators: true },
-    );
-    notificationMessage = " The uploader has been queued for notification.";
-  } catch (error) {
-    console.error(`Could not queue the decision notification for note ${note._id}:`, error);
-    notificationMessage = " The uploader notification could not be queued; administrator follow-up is required.";
-  }
+  const emailSent = await sendNoteDecisionEmail(note._id);
+  const notificationMessage = emailSent
+    ? " The uploader was emailed."
+    : " The uploader email could not be delivered; administrator follow-up is required.";
 
   let inAppNotificationMessage = "";
   try {
@@ -407,7 +390,7 @@ export async function listAdminStudents(request, response) {
   const page = parsePage(request.query.page);
   const q = typeof request.query.q === "string" ? request.query.q.trim() : "";
   if (q.length > 120) throw badRequest("Student search must be 120 characters or fewer.");
-  const filter = { role: "student" };
+  const filter = { role: "user" };
   if (q) {
     const match = new RegExp(escapeRegex(q), "i");
     filter.$or = [
@@ -487,7 +470,7 @@ export async function setStudentSuspension(request, response) {
   }
 
   const student = await User.findOneAndUpdate(
-    { _id: request.params.studentId, role: "student" },
+    { _id: request.params.studentId, role: "user" },
     {
       $set: {
         isSuspended: suspended,

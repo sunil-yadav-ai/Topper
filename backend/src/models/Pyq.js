@@ -30,6 +30,13 @@ const pyqSchema = new mongoose.Schema(
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     reviewedAt: { type: Date, default: null },
     fileName: { type: String, required: true, maxlength: 255 },
+    emailNotificationStatus: {
+      type: String,
+      enum: ["pending", "sending", "sent", "failed"],
+      default: "pending",
+      select: false,
+    },
+    emailNotificationSentAt: { type: Date, default: null, select: false },
     storage: {
       provider: { type: String, enum: ["cloudinary"], required: true },
       publicId: { type: String, required: true },

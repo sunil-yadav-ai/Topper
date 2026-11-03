@@ -186,7 +186,7 @@ export default function PyqsPage() {
   }
 
   async function toggleBookmark(pyq) {
-    if (!user || user.role !== "student") {
+    if (!user || user.role !== "user") {
       setError("Sign in with a student account to bookmark papers.");
       return;
     }
@@ -256,7 +256,7 @@ export default function PyqsPage() {
                 >
                   Dashboard
                 </Link>
-                {user.role === "student" && (
+                {user.role === "user" && (
                   <button
                     className="rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
                     onClick={() => setShowUpload((current) => !current)}
@@ -265,7 +265,7 @@ export default function PyqsPage() {
                     {showUpload ? "Close upload" : "Upload a PYQ"}
                   </button>
                 )}
-                {user.role === "student" && (
+                {user.role === "user" && (
                   <Link
                     className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                     to="/library"
@@ -314,7 +314,7 @@ export default function PyqsPage() {
         {error && <p className="mb-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700" role="alert">{error}</p>}
         {notice && <p className="mb-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700" role="status">{notice}</p>}
 
-        {showUpload && user?.role === "student" && (
+        {showUpload && user?.role === "user" && (
           <form
             className="mb-7 rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm sm:p-7"
             onSubmit={handleUpload}
@@ -392,7 +392,7 @@ export default function PyqsPage() {
           <aside className="ed-pyq-filter h-fit min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-bold text-ink">Find a paper</h2>
-              {user?.role === "student" && (
+              {user?.role === "user" && (
                 <button
                   className="text-xs font-semibold text-brand hover:underline"
                   onClick={() => {
@@ -501,6 +501,11 @@ export default function PyqsPage() {
                       <div><dt className="text-xs text-slate-500">Exam type</dt><dd className="font-semibold text-slate-800">{pyq.examType}</dd></div>
                     </dl>
                     <p className="mt-3 line-clamp-2 text-xs text-slate-500">{pyq.college} · {pyq.university}</p>
+                    {pyq.uploadedByUsername && (
+                      <Link className="mt-2 w-fit text-xs font-semibold text-brand hover:underline" to={`/profile/${encodeURIComponent(pyq.uploadedByUsername)}`}>
+                        Shared by {pyq.uploadedBy}
+                      </Link>
+                    )}
                     <p className="mt-2 text-xs text-slate-400">{formatSize(pyq.fileSize)} · {pyq.downloadCount} downloads</p>
                     <div className="mt-auto flex flex-wrap items-center gap-2 pt-5">
                       <a
@@ -511,7 +516,7 @@ export default function PyqsPage() {
                       >
                         Download free
                       </a>
-                      {user?.role === "student" && (
+                      {user?.role === "user" && (
                         <button
                           aria-label={pyq.isBookmarked ? "Remove bookmark" : "Bookmark paper"}
                           className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
@@ -521,7 +526,7 @@ export default function PyqsPage() {
                           {pyq.isBookmarked ? "★ Saved" : "☆ Save"}
                         </button>
                       )}
-                      {user?.role === "student" && (
+                      {user?.role === "user" && (
                         <button
                           className="w-full pt-1 text-left text-xs font-medium text-slate-500 hover:text-rose-700"
                           onClick={() => setReporting(pyq)}
