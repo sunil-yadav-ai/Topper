@@ -16,6 +16,7 @@ const noteOcrJobSchema = new mongoose.Schema(
     },
     attempts: { type: Number, default: 0, min: 0 },
     leaseAt: { type: Date },
+    retryAt: { type: Date },
     lastError: { type: String, maxlength: 300 },
   },
   { timestamps: true },

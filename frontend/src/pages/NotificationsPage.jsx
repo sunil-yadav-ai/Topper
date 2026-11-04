@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import NotificationBell from "../components/NotificationBell.jsx";
 import Panel from "../components/Panel.jsx";
-import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
 
 function messageFrom(error) {
@@ -10,7 +8,6 @@ function messageFrom(error) {
 }
 
 export default function NotificationsPage() {
-  const { user, signOut } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [page, setPage] = useState(1);
@@ -87,28 +84,8 @@ export default function NotificationsPage() {
     }
   }
 
-  async function handleSignOut() {
-    try {
-      await signOut();
-    } catch (requestError) {
-      setError(messageFrom(requestError));
-    }
-  }
-
   return (
     <main className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-4 py-3 sm:gap-3 sm:px-8 sm:py-4">
-          <Link className="text-xl font-extrabold tracking-tight text-ink" to={user?.role === "admin" ? "/admin" : "/dashboard"}>
-            Study<span className="text-brand">Share</span>
-          </Link>
-          <div className="flex items-center gap-2 sm:gap-3">
-            <NotificationBell />
-            <Link className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-indigo-50 hover:text-brand sm:inline" to={user?.role === "admin" ? "/admin" : "/dashboard"}>Dashboard</Link>
-            <button className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:text-sm" onClick={handleSignOut} type="button">Sign out</button>
-          </div>
-        </div>
-      </header>
       <section className="mx-auto max-w-5xl space-y-5 px-4 py-6 sm:px-8 sm:py-10">
         <div className="relative flex flex-wrap items-end justify-between gap-3 overflow-hidden rounded-3xl bg-gradient-to-br from-ink via-[#253372] to-indigo-700 px-5 py-6 text-white shadow-[0_24px_70px_-35px_rgba(30,41,59,0.6)] sm:px-7 sm:py-8">
           <div aria-hidden="true" className="pointer-events-none absolute -right-8 -top-20 size-52 rounded-full border-[28px] border-white/[0.06]" />

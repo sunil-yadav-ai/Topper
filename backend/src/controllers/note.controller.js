@@ -54,8 +54,19 @@ function requiredText(body, field, maxLength) {
   return value;
 }
 
+function optionalText(body, field, maxLength) {
+  const value = typeof body[field] === "string" ? body[field].trim() : "";
+  if (value.length > maxLength) {
+    const error = new Error(`${field} must be at most ${maxLength} characters.`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return value;
+}
+
 function serializeNote(note, request) {
   const noteId = note._id.toString();
+  const uploader = note.uploadedBy;
   return {
     id: noteId,
     title: note.title,
@@ -64,6 +75,8 @@ function serializeNote(note, request) {
     batch: note.batch,
     semester: note.semester,
     subject: note.subject,
+    university: note.university ?? "",
+    marks: note.marks ?? null,
     unit: note.unit,
     topic: note.topic,
     fileName: note.fileName,
@@ -90,6 +103,14 @@ function serializeNote(note, request) {
     ocrError: note.ocrError ?? null,
     revisionNumber: note.revisionNumber ?? 1,
     revisionOf: note.revisionOf?.toString() ?? null,
+    uploadedBy: uploader?.username
+      ? {
+          id: uploader._id.toString(),
+          fullName: uploader.fullName,
+          username: uploader.username,
+          avatarUrl: uploader.avatarUrl ?? "",
+        }
+      : null,
     createdAt: note.createdAt,
     downloadUrl: `${request.baseUrl}/${noteId}/file`,
   };
@@ -103,7 +124,20 @@ export async function createNote(request, response) {
   }
 
   const fileInfo = validateNoteFile(request.file);
-  const semester = Number(request.body.semester);
+  const marks = request.body.marks === undefined || request.body.marks === ""
+    ? undefined
+    : Number(request.body.marks);
+  if (
+    marks !== undefined &&
+    (!Number.isInteger(marks) || marks < 1 || marks > 100000)
+  ) {
+    const error = new Error("Marks must be a whole number between 1 and 100000.");
+    error.statusCode = 400;
+    throw error;
+  }
+  const semester = request.body.semester === undefined || request.body.semester === ""
+    ? request.user.semester
+    : Number(request.body.semester);
   if (!Number.isInteger(semester) || semester < 1 || semester > 12) {
     const error = new Error("Semester must be a whole number between 1 and 12.");
     error.statusCode = 400;
@@ -113,12 +147,20 @@ export async function createNote(request, response) {
   const fields = {
     title: requiredText(request.body, "title", 200),
     description: requiredText(request.body, "description", 2000),
-    department: requiredText(request.body, "department", 120),
-    batch: requiredText(request.body, "batch", 30),
+    department: request.body.department
+      ? requiredText(request.body, "department", 120)
+      : request.user.department,
+    batch: request.body.batch
+      ? requiredText(request.body, "batch", 30)
+      : request.user.batch,
     semester,
     subject: requiredText(request.body, "subject", 120),
-    unit: requiredText(request.body, "unit", 80),
-    topic: requiredText(request.body, "topic", 160),
+    university: request.body.university
+      ? requiredText(request.body, "university", 160)
+      : request.user.university,
+    marks,
+    unit: optionalText(request.body, "unit", 80),
+    topic: optionalText(request.body, "topic", 160),
   };
 
   const note = await createNoteSubmission({
@@ -170,7 +212,7 @@ async function createNoteSubmission({
       message: revisionOf
         ? `"${note.title}" was uploaded as a corrected version and is queued for OCR and AI verification.`
         : `"${note.title}" was uploaded and is queued for OCR and AI verification.`,
-      link: "/dashboard",
+      link: "/library",
       dedupeKey: `note-uploaded:${note._id}`,
     });
     await NoteOcrJob.create({ note: note._id });
@@ -251,6 +293,8 @@ export async function resubmitCorrectedNote(request, response) {
       batch: parent.batch,
       semester: parent.semester,
       subject: parent.subject,
+      university: parent.university ?? "",
+      marks: parent.marks,
       unit: parent.unit,
       topic: parent.topic,
     },
@@ -282,17 +326,80 @@ export async function getMyNotes(request, response) {
 }
 
 export async function getPublishedNotes(request, response) {
-  const notes = await Note.find({
+  const filter = {
+    department: {
+      $regex: `^${escapeRegex(request.user.department)}$`,
+      $options: "i",
+    },
     publicationStatus: "published",
     approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
-  })
-    .sort({ createdAt: -1 })
-    .limit(100)
-    .lean();
+  };
+  if (typeof request.query.subject === "string" && request.query.subject.trim()) {
+    const subject = request.query.subject.trim();
+    if (subject.length > 120) {
+      const error = new Error("Subject must be at most 120 characters.");
+      error.statusCode = 400;
+      throw error;
+    }
+    filter.subject = { $regex: `^${escapeRegex(subject)}$`, $options: "i" };
+  }
+
+  if (request.query.subjectsOnly === "true") {
+    const subjects = await Note.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: { subject: "$subject", semester: "$semester" },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { "_id.subject": 1, "_id.semester": 1 } },
+    ]);
+    const subjectStats = {};
+    for (const { _id, count } of subjects) {
+      subjectStats[_id.subject] ??= { count: 0, semesters: [] };
+      subjectStats[_id.subject].count += count;
+      subjectStats[_id.subject].semesters.push(_id.semester);
+    }
+    response.json({
+      status: "success",
+      subjects: Object.keys(subjectStats),
+      subjectStats,
+    });
+    return;
+  }
+
+  const page = Number(request.query.page ?? 1);
+  const limit = Number(request.query.limit ?? 100);
+  if (!Number.isInteger(page) || page < 1 || page > 10000) {
+    const error = new Error("Page must be a positive whole number.");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+    const error = new Error("Limit must be a whole number between 1 and 100.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const [notes, total] = await Promise.all([
+    Note.find(filter)
+      .populate("uploadedBy", "fullName username avatarUrl")
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    Note.countDocuments(filter),
+  ]);
   response.json({
     status: "success",
     notes: notes.map((note) => serializeNote(note, request)),
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) },
   });
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export async function downloadMyNote(request, response) {

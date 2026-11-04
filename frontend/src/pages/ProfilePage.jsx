@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useGSAP } from "@gsap/react";
+import { Camera } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
 import { gsap } from "../lib/gsap.js";
 import { PageLoader } from "../components/PageState.jsx";
+import ProfileImageCropDialog from "../components/ProfileImageCropDialog.jsx";
 
 const tabs = [
   ["all", "All contributions"],
@@ -40,25 +42,17 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const [avatarFile, setAvatarFile] = useState(null);
-  const [avatarPreview, setAvatarPreview] = useState("");
-  const [removeAvatar, setRemoveAvatar] = useState(false);
+  const [cropSelection, setCropSelection] = useState(null);
+  const [savingImage, setSavingImage] = useState("");
+  const [imageMessage, setImageMessage] = useState(null);
+  const avatarInputRef = useRef(null);
+  const coverInputRef = useRef(null);
   const rootRef = useRef(null);
   const isOwner = Boolean(user && data?.profile.id === user.id);
   const visibleContributions = useMemo(
     () => data?.contributions.filter((item) => activeTab === "all" || item.type === activeTab) ?? [],
     [activeTab, data],
   );
-
-  useEffect(() => {
-    if (!avatarFile) {
-      setAvatarPreview("");
-      return undefined;
-    }
-    const preview = URL.createObjectURL(avatarFile);
-    setAvatarPreview(preview);
-    return () => URL.revokeObjectURL(preview);
-  }, [avatarFile]);
 
   useEffect(() => {
     let active = true;
@@ -94,23 +88,14 @@ export default function ProfilePage() {
 
   async function saveProfile(event) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const selectedAvatar = formData.get("avatar");
-    if (!(selectedAvatar instanceof File) || !selectedAvatar.name) {
-      formData.delete("avatar");
-    }
-    if (removeAvatar) formData.set("removeAvatar", "true");
+    const formData = Object.fromEntries(new FormData(event.currentTarget).entries());
     setSaving(true);
     setSaveError("");
     try {
-      const { data: result } = await api.patch("/profiles/me", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const { data: result } = await api.patch("/profiles/me", formData);
       updateUser(result.profile);
       setData((current) => ({ ...current, profile: { ...current.profile, ...result.profile } }));
       setEditing(false);
-      setAvatarFile(null);
-      setRemoveAvatar(false);
       if (result.profile.username !== username) {
         navigate(`/profile/${encodeURIComponent(result.profile.username)}`, { replace: true });
       }
@@ -118,6 +103,61 @@ export default function ProfilePage() {
       setSaveError(errorMessage(requestError));
     } finally {
       setSaving(false);
+    }
+  }
+
+  function chooseProfileImage(event, imageType) {
+    const selected = event.currentTarget.files?.[0] ?? null;
+    event.currentTarget.value = "";
+    setImageMessage(null);
+    if (!selected) return;
+    const extension = selected.name.split(".").pop()?.toLowerCase();
+    const expectedMime = extension === "jpg" || extension === "jpeg"
+      ? "image/jpeg"
+      : `image/${extension}`;
+    const maximumBytes = imageType === "avatar" ? 5 : 8;
+    if (!["jpg", "jpeg", "png", "webp"].includes(extension) || selected.type !== expectedMime) {
+      setImageMessage({ type: "error", text: "Choose a JPG, JPEG, PNG, or WebP image." });
+      return;
+    }
+    if (!selected.size || selected.size > maximumBytes * 1024 * 1024) {
+      setImageMessage({ type: "error", text: `Choose an image smaller than ${maximumBytes} MB.` });
+      return;
+    }
+    setCropSelection({ file: selected, imageType });
+  }
+
+  async function saveCroppedImage(croppedFile) {
+    const imageType = cropSelection?.imageType;
+    if (!imageType) return;
+    const formData = new FormData();
+    formData.append(imageType === "avatar" ? "avatar" : "cover", croppedFile);
+    setSavingImage(imageType);
+    setImageMessage(null);
+    try {
+      const { data: result } = await api.patch("/profiles/me", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 60000,
+      });
+      updateUser(result.profile);
+      setData((current) => ({
+        ...current,
+        profile: { ...current.profile, ...result.profile },
+      }));
+      setCropSelection(null);
+      setImageMessage({
+        type: "success",
+        text: imageType === "avatar"
+          ? "Your profile picture has been updated."
+          : "Your profile cover has been updated.",
+      });
+      setAvatarFile(null);
+      setRemoveAvatar(false);
+    } catch (requestError) {
+      setImageMessage({ type: "error", text: errorMessage(requestError) });
+      throw requestError;
+    } finally {
+      setSavingImage("");
     }
   }
 
@@ -147,24 +187,75 @@ export default function ProfilePage() {
         </div>
 
         <section className="ed-profile-card" data-profile-animate>
-          <div aria-hidden="true" className="ed-profile-cover">
-            <span className="ed-profile-cover-orbit ed-profile-cover-orbit-one" />
-            <span className="ed-profile-cover-orbit ed-profile-cover-orbit-two" />
-            <span className="ed-profile-cover-star">✳</span>
-            <span className="ed-profile-cover-caption">GOOD NOTES.<br />GOOD PEOPLE.</span>
-            <span className="ed-profile-cover-label">THE STUDY COMMUNITY</span>
+          <div
+            aria-label="Profile cover poster"
+            className={`ed-profile-cover${profile.coverImage ? " has-custom-cover" : ""}`}
+            role={profile.coverImage ? "img" : undefined}
+            style={profile.coverImage ? { backgroundImage: `url("${profile.coverImage}")` } : undefined}
+          >
+            {!profile.coverImage && (
+              <>
+                <span aria-hidden="true" className="ed-profile-cover-orbit ed-profile-cover-orbit-one" />
+                <span aria-hidden="true" className="ed-profile-cover-orbit ed-profile-cover-orbit-two" />
+                <span aria-hidden="true" className="ed-profile-cover-star">✳</span>
+                <span aria-hidden="true" className="ed-profile-cover-caption">GOOD NOTES.<br />GOOD PEOPLE.</span>
+                <span aria-hidden="true" className="ed-profile-cover-label">THE STUDY COMMUNITY</span>
+              </>
+            )}
+            {isOwner && (
+              <>
+                <input
+                  accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                  aria-label="Choose profile cover image"
+                  className="ed-profile-image-input"
+                  onChange={(event) => chooseProfileImage(event, "cover")}
+                  ref={coverInputRef}
+                  type="file"
+                />
+                <button
+                  aria-label="Edit profile cover"
+                  className="ed-profile-image-edit ed-profile-cover-edit"
+                  disabled={Boolean(savingImage)}
+                  onClick={() => coverInputRef.current?.click()}
+                  type="button"
+                >
+                  <Camera aria-hidden="true" size={17} />
+                </button>
+              </>
+            )}
           </div>
 
           <div className="ed-profile-card-body">
             <div className="ed-profile-topline">
               <div aria-label={`${profile.fullName} profile picture`} className="ed-profile-avatar">
                 <span>{initials(profile.fullName)}</span>
-                {(avatarPreview || profile.avatarUrl) && (
+                {profile.avatarUrl && (
                   <img
                     alt={`${profile.fullName}'s profile`}
                     onError={(event) => { event.currentTarget.style.display = "none"; }}
-                    src={avatarPreview || profile.avatarUrl}
+                    src={profile.avatarUrl}
                   />
+                )}
+                {isOwner && (
+                  <>
+                    <input
+                      accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                      aria-label="Choose profile picture"
+                      className="ed-profile-image-input"
+                      onChange={(event) => chooseProfileImage(event, "avatar")}
+                      ref={avatarInputRef}
+                      type="file"
+                    />
+                    <button
+                      aria-label="Edit profile picture"
+                      className="ed-profile-image-edit ed-profile-avatar-edit"
+                      disabled={Boolean(savingImage)}
+                      onClick={() => avatarInputRef.current?.click()}
+                      type="button"
+                    >
+                      <Camera aria-hidden="true" size={16} />
+                    </button>
+                  </>
                 )}
               </div>
               <div className="ed-profile-actions">
@@ -183,6 +274,15 @@ export default function ProfilePage() {
                 )}
               </div>
             </div>
+
+            {imageMessage && (
+              <p
+                className={`ed-profile-image-message ${imageMessage.type === "error" ? "is-error" : "is-success"}`}
+                role={imageMessage.type === "error" ? "alert" : "status"}
+              >
+                {imageMessage.text}
+              </p>
+            )}
 
             <div className="ed-profile-overview">
               <div className="ed-profile-identity">
@@ -245,42 +345,9 @@ export default function ProfilePage() {
                     Course
                     <input defaultValue={profile.course} maxLength={120} name="course" />
                   </label>
-                  <label className="ed-profile-form-wide">
-                    Profile picture
-                    <input
-                      accept="image/jpeg,image/png,image/webp"
-                      className="ed-profile-file"
-                      name="avatar"
-                      onChange={(event) => {
-                        const file = event.currentTarget.files?.[0] ?? null;
-                        setAvatarFile(file);
-                        setRemoveAvatar(false);
-                        if (file && file.size > 5 * 1024 * 1024) {
-                          setSaveError("Choose an image smaller than 5 MB.");
-                          event.currentTarget.value = "";
-                          setAvatarFile(null);
-                        }
-                      }}
-                      type="file"
-                    />
-                    <small>JPG, JPEG, PNG, or WebP · maximum 5 MB</small>
-                  </label>
                 </div>
                 {saveError && <p className="ed-profile-form-error" role="alert">{saveError}</p>}
                 <div className="ed-profile-form-actions">
-                  {profile.avatarUrl && (
-                    <button
-                      className="ed-profile-remove-photo"
-                      onClick={() => {
-                        setAvatarFile(null);
-                        setRemoveAvatar(true);
-                        setSaveError("");
-                      }}
-                      type="button"
-                    >
-                      Remove current photo
-                    </button>
-                  )}
                   <button className="ed-profile-button ed-profile-button-dark" disabled={saving} type="submit">
                     {saving ? "Saving…" : "Save profile"} <span aria-hidden="true">↗</span>
                   </button>
@@ -349,6 +416,17 @@ export default function ProfilePage() {
           )}
         </section>
       </div>
+      {cropSelection && (
+        <ProfileImageCropDialog
+          file={cropSelection.file}
+          imageType={cropSelection.imageType}
+          onCancel={() => {
+            if (!savingImage) setCropSelection(null);
+          }}
+          onSave={saveCroppedImage}
+          saving={Boolean(savingImage)}
+        />
+      )}
     </main>
   );
 }

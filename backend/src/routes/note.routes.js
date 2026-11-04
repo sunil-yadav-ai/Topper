@@ -17,18 +17,20 @@ import {
   respondToNoteCommunityReport,
   reviewNoteCommunityReport,
 } from "../controllers/note-community.controller.js";
-import { isAdmin, requireAuth, requireRole } from "../middleware/auth.middleware.js";
+import { requireAuth, requireRole } from "../middleware/auth.middleware.js";
 
 const noteRouter = Router();
 
 noteRouter.get(
   "/reports/review",
-  isAdmin,
+  requireAuth,
+  requireRole("admin"),
   getCommunityReportsForReview,
 );
 noteRouter.patch(
   "/reports/:reportId/review",
-  isAdmin,
+  requireAuth,
+  requireRole("admin"),
   reviewNoteCommunityReport,
 );
 noteRouter.get(

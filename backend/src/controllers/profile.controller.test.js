@@ -23,6 +23,8 @@ test("public profile exposes only safe fields and approved contributions", async
     university: "Example University",
     course: "Computer Science",
     department: "Engineering",
+    avatarUrl: "https://images.example.com/ada.png",
+    coverImage: "https://images.example.com/cover.jpg",
     createdAt: new Date("2024-01-01T00:00:00Z"),
     role: "user",
     email: "private@example.com",
@@ -40,7 +42,13 @@ test("public profile exposes only safe fields and approved contributions", async
     limit() { return this; },
     async lean() { return result; },
   });
-  User.findOne = () => ({ select: async () => user });
+  User.findOne = () => ({
+    select: async (fields) => {
+      assert.match(fields, /\bavatarUrl\b/);
+      assert.match(fields, /\bcoverImage\b/);
+      return user;
+    },
+  });
   Note.find = (filter) => {
     assert.deepEqual(filter, noteFilter);
     return makeQuery([]);
@@ -64,6 +72,8 @@ test("public profile exposes only safe fields and approved contributions", async
     const serialized = JSON.stringify(response.payload);
     assert.equal(response.payload.profile.username, "ada.student");
     assert.equal(response.payload.profile.role, "user");
+    assert.equal(response.payload.profile.avatarUrl, user.avatarUrl);
+    assert.equal(response.payload.profile.coverImage, user.coverImage);
     assert.equal(serialized.includes(user.email), false);
     assert.equal(serialized.includes(user.password), false);
   } finally {

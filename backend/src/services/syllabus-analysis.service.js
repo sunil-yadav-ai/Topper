@@ -280,32 +280,15 @@ function cleanName(value, label, maxLength) {
   return cleaned;
 }
 
-export async function extractAndOrganizeSyllabus(file, format) {
-  const pages =
-    format === "pdf"
-      ? await splitSyllabusPdfIntoPages(file.buffer)
-      : [
-          {
-            pageNumber: 1,
-            mimeType: file.mimetype,
-            bytes: file.buffer,
-          },
-        ];
-  const ocrPages = [];
+export async function organizeSyllabusPages(ocrPages) {
   let totalTextLength = 0;
-  for (let index = 0; index < pages.length; index += 3) {
-    const extractedBatch = await Promise.all(
-      pages.slice(index, index + 3).map(extractPageText),
-    );
-    for (const extracted of extractedBatch) {
-      totalTextLength += extracted.extractedText.length;
-      if (totalTextLength > maxOcrTextLength) {
-        throw providerError(
-          "Extracted syllabus text exceeds the 100,000 character limit.",
-          413,
-        );
-      }
-      ocrPages.push(extracted);
+  for (const page of ocrPages) {
+    totalTextLength += page.extractedText.length;
+    if (totalTextLength > maxOcrTextLength) {
+      throw providerError(
+        "Extracted syllabus text exceeds the 100,000 character limit.",
+        413,
+      );
     }
   }
 
@@ -336,9 +319,30 @@ export async function extractAndOrganizeSyllabus(file, format) {
     schema: syllabusSchema,
     maxOutputTokens: 8000,
   });
+  return normalizeSyllabusStructure(result);
+}
+
+export async function extractAndOrganizeSyllabus(file, format) {
+  const pages =
+    format === "pdf"
+      ? await splitSyllabusPdfIntoPages(file.buffer)
+      : [
+          {
+            pageNumber: 1,
+            mimeType: file.mimetype,
+            bytes: file.buffer,
+          },
+        ];
+  const ocrPages = [];
+  for (let index = 0; index < pages.length; index += 3) {
+    const extractedBatch = await Promise.all(
+      pages.slice(index, index + 3).map(extractPageText),
+    );
+    ocrPages.push(...extractedBatch);
+  }
   return {
     pages: ocrPages,
-    structure: normalizeSyllabusStructure(result),
+    structure: await organizeSyllabusPages(ocrPages),
   };
 }
 

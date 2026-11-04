@@ -6,6 +6,7 @@ import { decryptJson } from "../services/encrypted-json.service.js";
 import {
   encryptSyllabusAnalysis,
   extractAndOrganizeSyllabus,
+  organizeSyllabusPages,
   normalizeSyllabusStructure,
   validateSyllabusFile,
 } from "../services/syllabus-analysis.service.js";
@@ -166,6 +167,38 @@ export async function updateSyllabusStructure(request, response) {
       ...data,
     },
   });
+}
+
+export async function regenerateSyllabusStructure(request, response) {
+  const analysis = await findOwnedAnalysis(request);
+  if (!["review", "confirmed"].includes(analysis.status)) {
+    throw badRequest("Only an extracted syllabus can be regenerated.");
+  }
+  const data = decryptJson(analysis.encryptedAnalysis);
+  try {
+    data.structure = await organizeSyllabusPages(data.pages ?? []);
+    data.resources = null;
+    analysis.status = "review";
+    analysis.processingError = undefined;
+    analysis.encryptedAnalysis = encryptSyllabusAnalysis(data);
+    await analysis.save();
+    response.json({
+      status: "success",
+      message: "The syllabus outline was regenerated from the uploaded document text.",
+      analysis: {
+        ...serializeSummary(analysis),
+        ...data,
+      },
+    });
+  } catch (error) {
+    if (!error.statusCode || error.statusCode >= 500) {
+      console.error("Syllabus outline regeneration failed:", error);
+    }
+    response.status(error.statusCode ?? 502).json({
+      status: "error",
+      message: error.message ?? "Syllabus outline regeneration failed.",
+    });
+  }
 }
 
 export async function confirmSyllabusAndFindResources(request, response) {

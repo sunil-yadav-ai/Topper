@@ -7,13 +7,13 @@ import Bookmark from "../models/Bookmark.js";
 import User from "../models/User.js";
 import { awardContribution } from "../services/reward.service.js";
 import {
-  deletePyqPdf,
-  getPublicPyqPdfUrl,
-  uploadPyqPdf,
+  deletePyqFile,
+  getPyqFileUrl,
+  uploadPyqFile,
 } from "../services/pyq-storage.service.js";
 import {
   parsePyqMetadata,
-  validatePyqPdf,
+  validatePyqFile,
 } from "../services/pyq-validation.service.js";
 import {
   getStudentLibrary,
@@ -29,11 +29,15 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: maxFileSize, files: 1 },
   fileFilter(_request, file, callback) {
-    if (
-      !file.originalname.toLowerCase().endsWith(".pdf") ||
-      file.mimetype !== "application/pdf"
-    ) {
-      const error = new Error("Upload a PDF file.");
+    const extension = file.originalname.split(".").pop()?.toLowerCase();
+    const mimeTypes = {
+      pdf: "application/pdf",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+    };
+    if (!mimeTypes[extension] || file.mimetype !== mimeTypes[extension]) {
+      const error = new Error("Upload a PDF, JPG, JPEG, or PNG question paper.");
       error.statusCode = 400;
       callback(error);
       return;
@@ -73,9 +77,12 @@ function serializePyq(pyq, savedIds = new Set()) {
     course: pyq.course,
     semester: pyq.semester,
     subject: pyq.subject,
+    title: pyq.title || `${pyq.subject} - ${pyq.examinationYear} ${pyq.examType}`,
+    description: pyq.description || `${pyq.course} · ${pyq.department}`,
     examinationYear: pyq.examinationYear,
     examType: pyq.examType,
     fileName: pyq.fileName,
+    fileFormat: pyq.storage.format ?? "pdf",
     fileSize: pyq.storage.bytes,
     downloadCount: pyq.downloadCount,
     reportCount: pyq.reportCount,
@@ -83,6 +90,7 @@ function serializePyq(pyq, savedIds = new Set()) {
     approvalStatus: pyq.approvalStatus ?? "pending",
     uploadedBy: pyq.uploadedBy?.fullName ?? "Student",
     uploadedByUsername: pyq.uploadedBy?.username ?? null,
+    uploadedByAvatarUrl: pyq.uploadedBy?.avatarUrl ?? "",
     isBookmarked: savedIds.has(pyq._id.toString()),
     createdAt: pyq.createdAt,
   };
@@ -144,7 +152,7 @@ export async function browsePyqs(request, response) {
   }
   const [pyqs, total, bookmarks] = await Promise.all([
     Pyq.find(filter)
-      .populate("uploadedBy", "fullName username")
+      .populate("uploadedBy", "fullName username avatarUrl")
       .sort({ examinationYear: -1, createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
@@ -165,21 +173,53 @@ export async function browsePyqs(request, response) {
   });
 }
 
+export async function getMyUploadedPyqs(request, response) {
+  const pyqs = await Pyq.find({ uploadedBy: request.user._id })
+    .sort({ createdAt: -1 })
+    .limit(100)
+    .lean();
+  response.json({
+    status: "success",
+    pyqs: pyqs.map((pyq) => ({
+      ...serializePyq(pyq),
+      downloadUrl: `/pyqs/mine/${pyq._id}/file`,
+    })),
+  });
+}
+
+export async function downloadMyPyqFile(request, response) {
+  if (!mongoose.isValidObjectId(request.params.pyqId)) {
+    throw badRequest("Question paper ID is invalid.");
+  }
+  const pyq = await Pyq.findOne({
+    _id: request.params.pyqId,
+    uploadedBy: request.user._id,
+  }).select("+storage");
+  if (!pyq) {
+    const error = new Error("Your uploaded question paper was not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+  response.redirect(getPyqFileUrl(pyq.storage));
+}
+
 export async function uploadPyq(request, response) {
-  validatePyqPdf(request.file);
-  const fields = parsePyqMetadata(request.body);
-  const storage = await uploadPyqPdf(request.file);
+  validatePyqFile(request.file);
+  const fields = parsePyqMetadata(request.body, request.user);
+  const storage = await uploadPyqFile(request.file);
   let pyq;
   try {
     pyq = await Pyq.create({
       ...fields,
+      title: fields.title ?? `${fields.subject} - ${fields.examinationYear} ${fields.examType}`,
+      description: fields.description ?? `${fields.course} · ${fields.department}`,
       fileName: basename(request.file.originalname),
       storage,
       uploadedBy: request.user._id,
     });
   } catch (error) {
     try {
-      await deletePyqPdf(storage);
+      await deletePyqFile(storage);
     } catch (cleanupError) {
       console.error("Failed to clean up an incomplete PYQ upload.", cleanupError);
     }
@@ -226,7 +266,7 @@ export async function downloadPyq(request, response) {
       downloaded: true,
     });
   }
-  response.redirect(getPublicPyqPdfUrl(pyq.storage));
+  response.redirect(getPyqFileUrl(pyq.storage));
 }
 
 export async function getMyBookmarks(request, response) {
@@ -343,7 +383,7 @@ export async function getPyqsForReview(_request, response) {
       ...serializePyq(pyq),
       approvalStatus: pyq.approvalStatus ?? "pending",
       uploaderEmail: pyq.uploadedBy?.email ?? "",
-      reviewUrl: getPublicPyqPdfUrl(pyq.storage),
+      reviewUrl: getPyqFileUrl(pyq.storage),
     })),
   });
 }

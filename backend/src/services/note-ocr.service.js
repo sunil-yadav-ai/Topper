@@ -121,7 +121,35 @@ async function callVisionModel(page) {
     }),
   });
   if (!response.ok) {
-    throw new Error(`Vision API returned HTTP ${response.status}.`);
+    const error = new Error(`Vision API returned HTTP ${response.status}.`);
+    if (response.status === 429) {
+      let providerErrorCode;
+      try {
+        const payload = await response.json();
+        providerErrorCode = payload.error?.code ?? payload.error?.type;
+      } catch (parseError) {
+        if (!(parseError instanceof SyntaxError)) throw parseError;
+      }
+      error.providerErrorCode = providerErrorCode;
+      if (typeof providerErrorCode === "string") {
+        error.message = `Vision API returned HTTP 429 (${providerErrorCode}).`;
+      }
+      error.retryableRateLimit = ![
+        "insufficient_quota",
+        "billing_hard_limit_reached",
+      ].includes(providerErrorCode);
+      const retryAfter = response.headers.get("retry-after");
+      if (retryAfter !== null) {
+        const retryAfterSeconds = Number(retryAfter);
+        const retryAfterDate = Date.parse(retryAfter);
+        if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0) {
+          error.retryAfterMs = retryAfterSeconds * 1000;
+        } else if (Number.isFinite(retryAfterDate)) {
+          error.retryAfterMs = Math.max(0, retryAfterDate - Date.now());
+        }
+      }
+    }
+    throw error;
   }
 
   const payload = await response.json();

@@ -44,21 +44,6 @@ function mapAuthError(error) {
   return error;
 }
 
-export async function isAdmin(request, _response, next) {
-  try {
-    const user = await getAuthenticatedUser(request);
-    if (user.role !== "admin") {
-      const error = new Error("You do not have permission to access this resource.");
-      error.statusCode = 403;
-      throw error;
-    }
-    request.user = user;
-    next();
-  } catch (error) {
-    next(mapAuthError(error));
-  }
-}
-
 export async function optionalAuth(request, _response, next) {
   const token = request.cookies?.[authCookieName];
   if (!token) {

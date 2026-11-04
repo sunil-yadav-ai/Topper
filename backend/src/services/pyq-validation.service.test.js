@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   parsePyqMetadata,
+  validatePyqFile,
   validatePyqPdf,
 } from "./pyq-validation.service.js";
 
@@ -33,6 +34,41 @@ test("validates the PDF signature and rejects missing or non-PDF content", () =>
   );
 });
 
+test("validates PDF and image question-paper uploads by MIME type and signature", () => {
+  assert.deepEqual(
+    validatePyqFile({
+      originalname: "paper.pdf",
+      mimetype: "application/pdf",
+      buffer: Buffer.from("%PDF-1.7\n"),
+    }),
+    { format: "pdf", mimeType: "application/pdf" },
+  );
+  assert.deepEqual(
+    validatePyqFile({
+      originalname: "paper.png",
+      mimetype: "image/png",
+      buffer: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    }),
+    { format: "png", mimeType: "image/png" },
+  );
+  assert.throws(
+    () => validatePyqFile({
+      originalname: "paper.jpg",
+      mimetype: "image/png",
+      buffer: Buffer.from([0xff, 0xd8, 0xff]),
+    }),
+    { statusCode: 400 },
+  );
+  assert.throws(
+    () => validatePyqFile({
+      originalname: "paper.png",
+      mimetype: "image/png",
+      buffer: Buffer.from("not an image"),
+    }),
+    { statusCode: 400 },
+  );
+});
+
 test("normalizes valid PYQ metadata", () => {
   assert.deepEqual(parsePyqMetadata(validMetadata), {
     ...validMetadata,
@@ -40,6 +76,49 @@ test("normalizes valid PYQ metadata", () => {
     semester: 4,
     examinationYear: 2025,
   });
+});
+
+test("retains the title and description when supplied", () => {
+  assert.deepEqual(
+    parsePyqMetadata({
+      ...validMetadata,
+      title: "Algorithms final",
+      description: "Spring semester question paper",
+    }),
+    {
+      ...validMetadata,
+      university: "Example University",
+      semester: 4,
+      examinationYear: 2025,
+      title: "Algorithms final",
+      description: "Spring semester question paper",
+    },
+  );
+});
+
+test("supports the upload page examination labels and student profile defaults", () => {
+  const { college, department, semester, university, ...paperFields } = validMetadata;
+  assert.deepEqual(
+    parsePyqMetadata(
+      { ...paperFields, examType: "End Semester" },
+      {
+        college,
+        department,
+        semester: Number(semester),
+        university: university.trim(),
+      },
+    ),
+    {
+      university: university.trim(),
+      college,
+      department,
+      course: paperFields.course,
+      semester: Number(semester),
+      subject: paperFields.subject,
+      examinationYear: Number(paperFields.examinationYear),
+      examType: "End Semester",
+    },
+  );
 });
 
 test("rejects out-of-range semester and examination year", () => {

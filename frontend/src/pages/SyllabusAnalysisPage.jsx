@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Copy, Download, RefreshCw } from "lucide-react";
 import Panel from "../components/Panel.jsx";
 import { api } from "../lib/api.js";
-import NotificationBell from "../components/NotificationBell.jsx";
 
 const emptyStructure = { subjects: [] };
 
@@ -12,6 +11,19 @@ function errorText(error) {
 
 function downloadUrl(path) {
   return `${api.defaults.baseURL.replace(/\/$/, "")}${path}`;
+}
+
+function formatOutline(structure) {
+  return structure.subjects.map((subject) => [
+    subject.name,
+    ...subject.units.map((unit) => [
+      `  ${unit.name}`,
+      ...unit.topics.flatMap((topic) => [
+        `    - ${topic.name}`,
+        ...topic.subtopics.map((subtopic) => `      • ${subtopic}`),
+      ]),
+    ].join("\n")),
+  ].join("\n")).join("\n\n");
 }
 
 function ResourceCard({ resource }) {
@@ -195,22 +207,48 @@ export default function SyllabusAnalysisPage() {
     }
   }
 
-  return (
-    <main className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-8 sm:py-4">
-          <Link className="shrink-0 text-xl font-extrabold tracking-tight text-ink" to="/">
-            Study<span className="text-brand">Share</span>
-          </Link>
-          <nav className="flex w-full flex-wrap items-center gap-1 border-t border-slate-100 pt-2 sm:w-auto sm:justify-end sm:gap-2 sm:border-0 sm:pt-0">
-            <Link className="rounded-xl px-3 py-2 text-sm font-semibold text-brand hover:bg-indigo-50" to="/search">Search resources</Link>
-            <Link className="rounded-xl px-3 py-2 text-sm font-semibold text-brand hover:bg-indigo-50" to="/pyqs">Free PYQs</Link>
-            <Link className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" to="/dashboard">Dashboard</Link>
-            <NotificationBell />
-          </nav>
-        </div>
-      </header>
+  async function regenerateOutline() {
+    if (!analysis || dirty) return;
+    setBusy("regenerating");
+    setError("");
+    setNotice("");
+    try {
+      const { data } = await api.post(`/syllabus-analyses/${analysis.id}/regenerate`);
+      applyAnalysis(data.analysis);
+      setAnalyses((current) => current.map((item) =>
+        item.id === data.analysis.id ? data.analysis : item,
+      ));
+      setNotice(data.message);
+    } catch (requestError) {
+      setError(errorText(requestError));
+    } finally {
+      setBusy("");
+    }
+  }
 
+  async function copyOutline() {
+    try {
+      await navigator.clipboard.writeText(formatOutline(structure));
+      setError("");
+      setNotice("The extracted outline was copied to your clipboard.");
+    } catch (copyError) {
+      setError(copyError.message || "Could not copy the outline. Check your browser clipboard permissions.");
+    }
+  }
+
+  function downloadOutline() {
+    const blob = new Blob([formatOutline(structure)], { type: "text/plain;charset=utf-8" });
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = "edurise-syllabus-topics.txt";
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+    setNotice("Your syllabus outline was downloaded.");
+  }
+
+  return (
+    <main className="ed-syllabus-page">
       <section className="mx-auto max-w-7xl space-y-5 px-4 py-6 sm:space-y-6 sm:px-8 sm:py-10">
         <div className="rounded-3xl border border-indigo-100 bg-gradient-to-br from-white via-white to-indigo-50 px-5 py-7 shadow-sm sm:px-8 sm:py-9">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand sm:text-sm">Study from your curriculum</p>
@@ -298,6 +336,15 @@ export default function SyllabusAnalysisPage() {
                       <div className="flex w-full flex-wrap gap-2 sm:w-auto">
                         <button
                           className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 disabled:opacity-50"
+                          disabled={dirty || Boolean(busy)}
+                          onClick={regenerateOutline}
+                          type="button"
+                        >
+                          <RefreshCw aria-hidden="true" className="mr-2 inline size-4" />
+                          {busy === "regenerating" ? "Regenerating…" : "Regenerate"}
+                        </button>
+                        <button
+                          className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 disabled:opacity-50"
                           disabled={!dirty || Boolean(busy)}
                           onClick={saveCorrections}
                           type="button"
@@ -311,6 +358,27 @@ export default function SyllabusAnalysisPage() {
                           type="button"
                         >
                           {busy === "matching" ? "Finding resources…" : "Confirm and find resources"}
+                        </button>
+                      </div>
+                    )}
+                    {["review", "confirmed"].includes(analysis.status) && (
+                      <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                        {analysis.status === "confirmed" && (
+                          <button
+                            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 disabled:opacity-50"
+                            disabled={Boolean(busy)}
+                            onClick={regenerateOutline}
+                            type="button"
+                          >
+                            <RefreshCw aria-hidden="true" className="mr-2 inline size-4" />
+                            {busy === "regenerating" ? "Regenerating…" : "Regenerate"}
+                          </button>
+                        )}
+                        <button className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700" onClick={copyOutline} type="button">
+                          <Copy aria-hidden="true" className="mr-2 inline size-4" />Copy topics
+                        </button>
+                        <button className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700" onClick={downloadOutline} type="button">
+                          <Download aria-hidden="true" className="mr-2 inline size-4" />Download
                         </button>
                       </div>
                     )}

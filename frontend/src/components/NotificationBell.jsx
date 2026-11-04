@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Bell } from "lucide-react";
 import { api } from "../lib/api.js";
 
 function messageFrom(error) {
@@ -97,9 +98,7 @@ export default function NotificationBell() {
         onClick={() => setOpen((current) => !current)}
         type="button"
       >
-        <svg aria-hidden="true" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        <Bell aria-hidden="true" className="size-5" strokeWidth={1.8} />
         {unreadCount > 0 && (
           <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-rose-600 px-1 text-center text-[10px] font-bold leading-5 text-white">
             {unreadCount > 99 ? "99+" : unreadCount}

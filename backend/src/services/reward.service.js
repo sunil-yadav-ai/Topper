@@ -189,7 +189,7 @@ export async function awardContribution({
         type: "points_awarded",
         title: "Contributor points awarded",
         message: `${points} points were awarded for "${safeTitle}". ${explanation}`,
-        link: "/dashboard",
+        link: "/library",
         dedupeKey: `points-awarded:${transaction._id}`,
       });
     } catch (notificationError) {
@@ -297,7 +297,7 @@ export async function adjustRewardPoints({
           type: "points_awarded",
           title: "Contributor points awarded",
           message: `${magnitude} points were added to your contributor balance. Reason: ${normalizedReason}`,
-          link: "/dashboard",
+          link: "/library",
           dedupeKey: `points-awarded:${transaction._id}`,
         });
       } catch (notificationError) {

@@ -95,8 +95,8 @@ database readiness. Use `npm run build` to build the frontend.
 
 ## Handwritten note uploads
 
-- Students can upload PDF, JPG/JPEG, and PNG notes (maximum 10 MB) from their
-  dashboard. The upload form captures title, description, department, batch,
+- Students can upload PDF, JPG/JPEG, and PNG notes (maximum 10 MB) from
+  `/upload` or their dashboard. The upload form captures title, description, department, batch,
   semester, subject, unit, and topic; department, batch, and semester default
   to the student's profile.
 - `POST /api/notes` accepts multipart form data with a `file` field and the
@@ -156,15 +156,19 @@ database readiness. Use `npm run build` to build the frontend.
 - `/pyqs` provides public, free browsing, filtering by semester, subject,
   and examination year, and direct PDF downloads. Uploading, bookmarking, and
   reporting require an authenticated student session.
-- Students upload papers from `/pyqs` with university, college, department,
-  course, semester, subject, examination year, exam type, and a PDF file
-  (maximum 20 MB). PDFs are signature-checked and stored as authenticated
-  Cloudinary assets using the existing Cloudinary configuration. Each paper
-  records its original uploader and stays private until an administrator
-  approves it. Approved downloads use short-lived signed URLs.
+- Students upload papers from `/upload` or `/pyqs` with university, college,
+  department, course, semester, subject, examination year, exam type, title,
+  description, and a PDF/JPG/JPEG/PNG file (maximum 20 MB). Files are
+  signature-checked and stored as authenticated Cloudinary assets using the
+  existing Cloudinary configuration. Each paper records its original uploader
+  and stays private until an administrator approves it. Approved downloads use
+  short-lived signed URLs; owners can access their submissions from My Library.
 - After MongoDB saves a paper, the backend sends the uploader a confirmation
   email through Nodemailer. Email delivery failures do not undo or fail the
   successful upload.
+- The dedicated `/upload` form also accepts question-paper PDFs and images.
+  Students can review uploaded notes and PYQs, including private review status,
+  in the **My uploads** section of `/library`.
 - The API includes `GET /api/pyqs`, `GET /api/pyqs/:pyqId/download`,
   `POST /api/pyqs`, `GET /api/pyqs/bookmarks`,
   `POST`/`DELETE /api/pyqs/:pyqId/bookmark`, and
@@ -202,17 +206,19 @@ database readiness. Use `npm run build` to build the frontend.
   encrypted in MongoDB with `OCR_ENCRYPTION_KEY`; records are accessible only
   to the uploading student. The original syllabus file is not retained.
 - Students can review, add, remove, and correct extracted outline entries.
-  Resource matching is not run until the student saves corrections and
-  confirms the syllabus.
+  Students can regenerate the outline from the stored, encrypted OCR text or
+  copy/download the reviewed topics. Resource matching is not run until the
+  student saves corrections and confirms the syllabus.
 - Matching queries use only published AI-approved notes and administrator-
   approved PYQs. Topic-specific note matches, missing topics, and subject-level
   PYQs are returned from actual database records; no placeholder resources are
   generated. PYQs are shown at subject level because they do not have verified
   topic metadata.
 - APIs under `/api/syllabus-analyses` provide upload, owner-scoped list/detail,
-  correction, and confirmation/resource matching. Configure `OPENAI_API_KEY`
-  and `OCR_ENCRYPTION_KEY`; `OPENAI_SYLLABUS_MODEL` selects the model and
-  defaults to `OPENAI_OCR_MODEL` or `gpt-4.1-mini`.
+  correction, source-grounded regeneration, and confirmation/resource matching.
+  Configure `OPENAI_API_KEY` and `OCR_ENCRYPTION_KEY`;
+  `OPENAI_SYLLABUS_MODEL` selects the model and defaults to `OPENAI_OCR_MODEL`
+  or `gpt-4.1-mini`.
 
 ## Community note fact-checking
 

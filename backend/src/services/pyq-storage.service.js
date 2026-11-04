@@ -17,8 +17,9 @@ function getCloudinary() {
   return cloudinary;
 }
 
-export async function uploadPyqPdf(file) {
+export async function uploadPyqFile(file) {
   const storage = getCloudinary();
+  const format = file.originalname.split(".").pop()?.toLowerCase() ?? "pdf";
   return new Promise((resolve, reject) => {
     const upload = storage.uploader.upload_stream(
       {
@@ -38,6 +39,8 @@ export async function uploadPyqPdf(file) {
           publicId: result.public_id,
           resourceType: "raw",
           accessType: "authenticated",
+          format,
+          mimeType: file.mimetype,
           bytes: file.size,
         });
       },
@@ -46,7 +49,7 @@ export async function uploadPyqPdf(file) {
   });
 }
 
-export async function deletePyqPdf(storageInfo) {
+export async function deletePyqFile(storageInfo) {
   const storage = getCloudinary();
   const result = await storage.uploader.destroy(storageInfo.publicId, {
     resource_type: "raw",
@@ -58,10 +61,11 @@ export async function deletePyqPdf(storageInfo) {
   }
 }
 
-export function getPublicPyqPdfUrl(storageInfo) {
+export function getPyqFileUrl(storageInfo) {
   const storage = getCloudinary();
+  const format = storageInfo.format ?? "pdf";
   if ((storageInfo.accessType ?? "upload") === "authenticated") {
-    return storage.utils.private_download_url(storageInfo.publicId, "pdf", {
+    return storage.utils.private_download_url(storageInfo.publicId, format, {
       resource_type: "raw",
       type: "authenticated",
       expires_at: Math.floor(Date.now() / 1000) + 300,
@@ -71,6 +75,6 @@ export function getPublicPyqPdfUrl(storageInfo) {
     resource_type: "raw",
     type: "upload",
     secure: true,
-    format: "pdf",
+    format,
   });
 }

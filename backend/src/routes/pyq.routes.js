@@ -2,7 +2,9 @@ import { Router } from "express";
 import {
   bookmarkPyq,
   browsePyqs,
+  downloadMyPyqFile,
   downloadPyq,
+  getMyUploadedPyqs,
   getMyBookmarks,
   getPyqsForReview,
   receivePyqPdf,
@@ -12,7 +14,6 @@ import {
   uploadPyq,
 } from "../controllers/pyq.controller.js";
 import {
-  isAdmin,
   optionalAuth,
   requireAuth,
   requireRole,
@@ -22,13 +23,27 @@ const pyqRouter = Router();
 
 pyqRouter.get(
   "/review",
-  isAdmin,
+  requireAuth,
+  requireRole("admin"),
   getPyqsForReview,
 );
 pyqRouter.patch(
   "/:pyqId/approval",
-  isAdmin,
+  requireAuth,
+  requireRole("admin"),
   reviewPyq,
+);
+pyqRouter.get(
+  "/mine",
+  requireAuth,
+  requireRole("user"),
+  getMyUploadedPyqs,
+);
+pyqRouter.get(
+  "/mine/:pyqId/file",
+  requireAuth,
+  requireRole("user"),
+  downloadMyPyqFile,
 );
 pyqRouter.get("/", optionalAuth, browsePyqs);
 pyqRouter.get("/:pyqId/download", optionalAuth, downloadPyq);

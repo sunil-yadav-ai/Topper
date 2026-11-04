@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useGSAP } from "@gsap/react";
+import {
+  BookOpenText,
+  Compass,
+  LayoutDashboard,
+  LibraryBig,
+  LogOut,
+  Menu,
+  Upload,
+  UserRound,
+  X,
+} from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { gsap } from "../lib/gsap.js";
 import NotificationBell from "./NotificationBell.jsx";
@@ -17,14 +28,62 @@ function BrandMark({ inverse = false }) {
 }
 
 export function SiteHeader() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
+  return user ? <AuthenticatedSiteHeader user={user} /> : <PublicSiteHeader />;
+}
+
+function PublicSiteHeader() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [menuOpen]);
+
+  return (
+    <header className="ed-header ed-app-header">
+      <div className="ed-header-inner">
+        <Link aria-label="EduRise home" className="ed-logo-link" to="/"><BrandMark /></Link>
+        <button
+          aria-expanded={menuOpen}
+          aria-label={menuOpen ? "Close navigation" : "Open navigation"}
+          className="ed-menu-toggle"
+          onClick={() => setMenuOpen((open) => !open)}
+          type="button"
+        >
+          <span /><span />
+        </button>
+        <nav aria-label="Main navigation" className={`ed-nav ed-app-nav ${menuOpen ? "ed-nav-open" : ""}`}>
+          <Link to="/search">Explore</Link>
+          <Link to="/pyqs">Free PYQs</Link>
+          <Link to="/login">Student sign in</Link>
+          <Link className="ed-nav-cta" to="/register">
+            Join for free
+            <span aria-hidden="true" className="ed-arrow">→</span>
+          </Link>
+        </nav>
+      </div>
+    </header>
+  );
+}
+
+export function AuthenticatedSiteHeader({ user }) {
+  const { signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [signOutError, setSignOutError] = useState("");
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const dashboardPath = user
-    ? user.role === "admin" ? "/admin" : "/dashboard"
-    : "/register";
+  const navLinkClass = ({ isActive }) =>
+    `ed-nav-link${isActive ? " is-active" : ""}`;
 
   useEffect(() => {
     setMenuOpen(false);
@@ -44,7 +103,7 @@ export function SiteHeader() {
     setSignOutError("");
     try {
       await signOut();
-      navigate("/", { replace: true });
+      navigate(user.role === "admin" ? "/admin/login" : "/", { replace: true });
     } catch (error) {
       setSignOutError(error.response?.data?.message ?? error.message ?? "Could not sign out. Please try again.");
     }
@@ -56,30 +115,42 @@ export function SiteHeader() {
         <Link aria-label="EduRise home" className="ed-logo-link" to="/"><BrandMark /></Link>
         <button
           aria-expanded={menuOpen}
+          aria-controls="ed-main-navigation"
           aria-label={menuOpen ? "Close navigation" : "Open navigation"}
           className="ed-menu-toggle"
           onClick={() => setMenuOpen((open) => !open)}
           type="button"
         >
-          <span /><span />
+          {menuOpen ? <X aria-hidden="true" size={21} /> : <Menu aria-hidden="true" size={21} />}
         </button>
-        <nav aria-label="Main navigation" className={`ed-nav ed-app-nav ${menuOpen ? "ed-nav-open" : ""}`}>
-          <Link to="/search">Explore</Link>
-          <Link to="/pyqs">Free PYQs</Link>
-          {user ? (
+        <nav aria-label="Main navigation" className={`ed-nav ed-app-nav ${menuOpen ? "ed-nav-open" : ""}`} id="ed-main-navigation">
+          {user.role === "user" && (
             <>
-              {user.username && <Link to={`/profile/${encodeURIComponent(user.username)}`}>My profile</Link>}
-              <Link to="/library">My library</Link>
-              <NotificationBell />
-              <button className="ed-nav-signout" onClick={handleSignOut} type="button">Sign out</button>
+              <NavLink className={navLinkClass} to="/search"><Compass aria-hidden="true" />Explore</NavLink>
+              <NavLink className={navLinkClass} to="/uploads"><Upload aria-hidden="true" />Upload</NavLink>
+              <NavLink className={navLinkClass} to="/syllabus"><BookOpenText aria-hidden="true" />Syllabus analyzer</NavLink>
+              {user.username && (
+                <NavLink className={navLinkClass} to={`/profile/${encodeURIComponent(user.username)}`}>
+                  <UserRound aria-hidden="true" />My profile
+                </NavLink>
+              )}
+              <NavLink className={navLinkClass} to="/library"><LibraryBig aria-hidden="true" />My library</NavLink>
             </>
-          ) : (
-            <Link to="/login">Student sign in</Link>
           )}
-          <Link className="ed-nav-cta" to={dashboardPath}>
-            {user?.role === "admin" ? "Admin Dashboard" : user ? "My dashboard" : "Join for free"}
-            <span aria-hidden="true" className="ed-arrow">→</span>
-          </Link>
+          {user.role === "admin" && (
+            <NavLink className={navLinkClass} to="/search"><Compass aria-hidden="true" />Explore</NavLink>
+          )}
+          <NotificationBell />
+          <button className="ed-nav-signout" onClick={handleSignOut} type="button">
+            <LogOut aria-hidden="true" />Sign out
+          </button>
+          {user.role === "admin" && (
+            <NavLink className="ed-nav-cta" to="/admin">
+              <LayoutDashboard aria-hidden="true" />
+              Admin dashboard
+              <span aria-hidden="true" className="ed-arrow">→</span>
+            </NavLink>
+          )}
         </nav>
         {signOutError && <p className="ed-nav-error" role="alert">{signOutError}</p>}
       </div>

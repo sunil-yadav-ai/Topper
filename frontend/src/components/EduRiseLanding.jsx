@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useGSAP } from "@gsap/react";
 import AdUnit from "./AdUnit.jsx";
+import { AuthenticatedSiteHeader } from "./SiteChrome.jsx";
 import NotificationBell from "./NotificationBell.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
+import { getPostLoginPath } from "../lib/navigation.js";
 import { api } from "../lib/api.js";
 import { Flip, Observer, ScrollTrigger, gsap } from "../lib/gsap.js";
 
@@ -563,7 +565,7 @@ export default function EduRiseLanding() {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(
     () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
-  const dashboardPath = user ? (user.role === "admin" ? "/admin" : "/dashboard") : "/register";
+  const accountPath = user ? getPostLoginPath(user) : "/register";
 
   useEffect(() => {
     const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -919,7 +921,7 @@ export default function EduRiseLanding() {
         <path className="ed-motion-path" d="M 50 4 C 85 4 96 24 96 50 C 96 77 78 96 50 96 C 22 96 4 77 4 50 C 4 22 22 4 50 4" fill="none" />
         <path className="ed-path-star" d="m50 0 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1 3-6Z" />
       </svg>
-      <header className="ed-header">
+      {user ? <AuthenticatedSiteHeader user={user} /> : <header className="ed-header">
         <div className="ed-header-inner">
           <Link aria-label="EduRise home" className="ed-logo-link" to="/"><BrandMark /></Link>
           <button
@@ -942,12 +944,12 @@ export default function EduRiseLanding() {
               </Link>
             )}
             {user && <NotificationBell />}
-            <Link className="ed-nav-cta" to={dashboardPath} onClick={() => setMenuOpen(false)}>
-              {user?.role === "admin" ? "Admin Dashboard" : user ? "My dashboard" : "Join for free"} <Arrow />
+            <Link className="ed-nav-cta" to={accountPath} onClick={() => setMenuOpen(false)}>
+              {user?.role === "admin" ? "Admin Dashboard" : user ? "My profile" : "Join for free"} <Arrow />
             </Link>
           </nav>
         </div>
-      </header>
+      </header>}
 
       <section aria-labelledby="hero-heading" className="ed-hero" id="about">
         <div aria-hidden="true" className="ed-hero-backdrop" />
@@ -965,7 +967,7 @@ export default function EduRiseLanding() {
             <p>Your notes can help someone learn. Discover, share and grow with <b>EduRise.</b></p>
             <div className="ed-hero-actions">
               <ButtonLink className="ed-hero-primary" to="/search" kind="dark">Explore resources</ButtonLink>
-              <ButtonLink className="ed-hero-secondary" to={user ? dashboardPath : "/register"} kind="paper">Share your notes</ButtonLink>
+              <ButtonLink className="ed-hero-secondary" to={user ? "/uploads" : "/register"} kind="paper">Share your notes</ButtonLink>
             </div>
             <div className="ed-hero-proof">
               <span><i>✓</i> Always free to learn</span>
@@ -1017,7 +1019,9 @@ export default function EduRiseLanding() {
             </h2>
             <p>One upload can make somebody else’s hard chapter click.</p>
             <div className="ed-hero-actions">
-              <ButtonLink className="ed-cta-dark" to={dashboardPath} kind="dark">Join EduRise</ButtonLink>
+              <ButtonLink className="ed-cta-dark" to={accountPath} kind="dark">
+                {user?.role === "admin" ? "Admin dashboard" : user ? "My profile" : "Join EduRise"}
+              </ButtonLink>
               <ButtonLink className="ed-cta-paper" to="/search" kind="paper">Explore resources</ButtonLink>
             </div>
           </Reveal>

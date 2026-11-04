@@ -5,6 +5,7 @@ import FormField from "../components/FormField.jsx";
 import SubmitButton from "../components/SubmitButton.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
+import { getPostLoginPath } from "../lib/navigation.js";
 
 function FormAlert({ message, success = false }) {
   if (!message) return null;
@@ -60,7 +61,7 @@ export function LoginPage({ admin = false }) {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
     const user = await request.submit(() => signIn(values, admin));
-    if (user) navigate(user.role === "admin" ? "/admin" : "/dashboard", { replace: true });
+    if (user) navigate(getPostLoginPath(user), { replace: true });
   }
 
   const title = admin ? "Admin sign in" : "Welcome back";
@@ -110,13 +111,11 @@ export function LoginPage({ admin = false }) {
           </Link>
         </p>
       )}
-      <p className="mt-4 text-center text-sm text-slate-500">
-        {admin ? (
+      {admin && (
+        <p className="mt-4 text-center text-sm text-slate-500">
           <Link className="hover:text-brand" to="/login">Student sign in</Link>
-        ) : (
-          <Link className="hover:text-brand" to="/admin/login">Administrator sign in</Link>
-        )}
-      </p>
+        </p>
+      )}
     </AuthLayout>
   );
 }

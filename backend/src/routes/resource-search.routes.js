@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  getResourceSearchOptionsCollection,
   downloadApprovedNote,
   markSearchResultHelpful,
   searchResourceCollection,
@@ -14,6 +15,7 @@ import {
 const resourceSearchRouter = Router();
 
 resourceSearchRouter.get("/", optionalAuth, searchResourceCollection);
+resourceSearchRouter.get("/options", getResourceSearchOptionsCollection);
 resourceSearchRouter.get("/suggestions", suggestResourceCollection);
 resourceSearchRouter.get(
   "/notes/:noteId/download",

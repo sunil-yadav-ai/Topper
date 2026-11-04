@@ -8,12 +8,12 @@ import {
   reviewAdminPyqReport,
   setStudentSuspension,
 } from "../controllers/admin.controller.js";
-import { isAdmin } from "../middleware/auth.middleware.js";
+import { requireAuth, requireRole } from "../middleware/auth.middleware.js";
 import { sendAdminAnnouncement } from "../controllers/notifications.controller.js";
 
 const adminRouter = Router();
 
-adminRouter.use(isAdmin);
+adminRouter.use(requireAuth, requireRole("admin"));
 adminRouter.post("/announcements", sendAdminAnnouncement);
 adminRouter.get("/overview", getAdminOverview);
 adminRouter.get("/notes", listAdminNotes);

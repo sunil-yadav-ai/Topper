@@ -8,8 +8,10 @@ const noteSchema = new mongoose.Schema(
     batch: { type: String, required: true, trim: true, maxlength: 30 },
     semester: { type: Number, required: true, min: 1, max: 12 },
     subject: { type: String, required: true, trim: true, maxlength: 120 },
-    unit: { type: String, required: true, trim: true, maxlength: 80 },
-    topic: { type: String, required: true, trim: true, maxlength: 160 },
+    university: { type: String, trim: true, maxlength: 160, default: "" },
+    marks: { type: Number, min: 1, max: 100000 },
+    unit: { type: String, trim: true, maxlength: 80, default: "" },
+    topic: { type: String, trim: true, maxlength: 160, default: "" },
     uploadedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -140,6 +142,11 @@ noteSchema.index({
   subject: 1,
   unit: 1,
   topic: 1,
+});
+noteSchema.index({
+  publicationStatus: 1,
+  approvalDecision: 1,
+  university: 1,
 });
 noteSchema.index({ publicationStatus: 1, approvalDecision: 1, subject: 1 });
 noteSchema.index({ publicationStatus: 1, approvalDecision: 1, unit: 1 });

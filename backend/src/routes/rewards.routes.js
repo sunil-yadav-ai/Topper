@@ -6,7 +6,7 @@ import {
   getMyRewards,
   getRewardsLeaderboard,
 } from "../controllers/rewards.controller.js";
-import { isAdmin, requireAuth, requireRole } from "../middleware/auth.middleware.js";
+import { requireAuth, requireRole } from "../middleware/auth.middleware.js";
 
 const rewardsRouter = Router();
 
@@ -24,17 +24,20 @@ rewardsRouter.get(
 );
 rewardsRouter.get(
   "/admin/overview",
-  isAdmin,
+  requireAuth,
+  requireRole("admin"),
   getAdminRewardsOverview,
 );
 rewardsRouter.post(
   "/admin/adjust",
-  isAdmin,
+  requireAuth,
+  requireRole("admin"),
   adjustStudentRewards,
 );
 rewardsRouter.post(
   "/admin/quality-bonus",
-  isAdmin,
+  requireAuth,
+  requireRole("admin"),
   awardHighQualityResource,
 );
 

@@ -10,7 +10,7 @@ test("notifications store supported events, ownership, and read state", () => {
     title: "Report reviewed",
     message: "An administrator reviewed the report.",
     dedupeKey: "community-report:resolved:123",
-    link: "/dashboard",
+    link: "/library",
   });
   assert.equal(notification.readAt, null);
   assert.equal(notification.validateSync(), undefined);

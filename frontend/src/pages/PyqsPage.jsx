@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
-import NotificationBell from "../components/NotificationBell.jsx";
+import { notifyResourceOptionsUpdated } from "../lib/resource-options.js";
 import AdUnit from "../components/AdUnit.jsx";
 import { PageLoader } from "../components/PageState.jsx";
 
@@ -13,6 +13,8 @@ const initialFilters = {
   examinationYear: "",
 };
 const emptyUpload = {
+  title: "",
+  description: "",
   university: "",
   college: "",
   department: "",
@@ -133,15 +135,19 @@ export default function PyqsPage() {
       setError("Choose a question paper PDF to upload.");
       return;
     }
-    if (
-      !uploadFile.name.toLowerCase().endsWith(".pdf") ||
-      uploadFile.type !== "application/pdf"
-    ) {
-      setError("Only PDF question papers are supported.");
+    const extension = uploadFile.name.split(".").pop()?.toLowerCase();
+    const supportedTypes = {
+      pdf: "application/pdf",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+    };
+    if (!supportedTypes[extension] || uploadFile.type !== supportedTypes[extension]) {
+      setError("Choose a valid PDF, JPG, JPEG, or PNG question paper.");
       return;
     }
     if (uploadFile.size > 20 * 1024 * 1024) {
-      setError("Question paper PDFs must be 20 MB or smaller.");
+      setError("Question paper files must be 20 MB or smaller.");
       return;
     }
 
@@ -163,6 +169,7 @@ export default function PyqsPage() {
         },
       });
       setNotice(data.message);
+      notifyResourceOptionsUpdated();
       setUploadFile(null);
       setUploadFields((current) => ({
         ...emptyUpload,
@@ -235,58 +242,7 @@ export default function PyqsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-8 sm:py-4">
-          <Link className="shrink-0 text-xl font-extrabold tracking-tight text-ink" to="/">
-            Study<span className="text-brand">Share</span>
-          </Link>
-          <nav className="flex w-full flex-wrap items-center gap-1 border-t border-slate-100 pt-2 sm:w-auto sm:justify-end sm:gap-2 sm:border-0 sm:pt-0">
-            <Link
-              className="rounded-xl px-3 py-2 text-sm font-semibold text-brand hover:bg-indigo-50"
-              to="/search"
-            >
-              Search resources
-            </Link>
-            {user ? (
-              <>
-                <Link
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                  to={user.role === "admin" ? "/admin" : "/dashboard"}
-                >
-                  Dashboard
-                </Link>
-                {user.role === "user" && (
-                  <button
-                    className="rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
-                    onClick={() => setShowUpload((current) => !current)}
-                    type="button"
-                  >
-                    {showUpload ? "Close upload" : "Upload a PYQ"}
-                  </button>
-                )}
-                {user.role === "user" && (
-                  <Link
-                    className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                    to="/library"
-                  >
-                    My library
-                  </Link>
-                )}
-              </>
-            ) : (
-              <Link
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                to="/login"
-              >
-                Sign in to upload
-              </Link>
-            )}
-            {user && <NotificationBell />}
-          </nav>
-        </div>
-      </header>
-
+    <main className="ed-pyqs-page min-h-screen bg-slate-50">
       <section className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
         <div className="ed-pyq-hero relative mb-6 flex flex-wrap items-end justify-between gap-4 rounded-3xl border border-indigo-100 bg-gradient-to-br from-white via-white to-indigo-50 px-5 py-7 shadow-sm sm:mb-8 sm:px-8 sm:py-9" data-ed-animate>
           <div className="ed-pyq-hero-copy min-w-0">
@@ -321,9 +277,10 @@ export default function PyqsPage() {
           >
             <div className="mb-5">
               <h2 className="text-xl font-bold text-ink">Share a question paper</h2>
-              <p className="mt-1 text-sm text-slate-500">PDF only · maximum 20 MB · free for everyone.</p>
+              <p className="mt-1 text-sm text-slate-500">PDF, JPG, JPEG, or PNG · maximum 20 MB · free for everyone.</p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="Title" name="title" maxLength={200} onChange={updateUploadField} required value={uploadFields.title} />
               <Field label="University" name="university" maxLength={160} onChange={updateUploadField} required value={uploadFields.university} />
               <Field label="College" name="college" maxLength={160} onChange={updateUploadField} required value={uploadFields.college} />
               <Field label="Department" name="department" maxLength={120} onChange={updateUploadField} required value={uploadFields.department} />
@@ -361,9 +318,21 @@ export default function PyqsPage() {
               </label>
             </div>
             <label className="mt-4 block">
-              <span className="mb-1.5 block text-sm font-semibold text-slate-700">PDF question paper</span>
+              <span className="mb-1.5 block text-sm font-semibold text-slate-700">Description</span>
+              <textarea
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/15"
+                maxLength={2000}
+                name="description"
+                onChange={updateUploadField}
+                required
+                rows={3}
+                value={uploadFields.description}
+              />
+            </label>
+            <label className="mt-4 block">
+              <span className="mb-1.5 block text-sm font-semibold text-slate-700">Question paper (PDF or image)</span>
               <input
-                accept="application/pdf,.pdf"
+                accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
                 className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-semibold file:text-brand"
                 onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
                 required

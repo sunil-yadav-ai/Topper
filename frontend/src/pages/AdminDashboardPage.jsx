@@ -1,10 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
 import CommunityReports from "../components/dashboard/CommunityReports.jsx";
 import AdminRewardsPanel from "../components/AdminRewardsPanel.jsx";
 import Panel from "../components/Panel.jsx";
-import NotificationBell from "../components/NotificationBell.jsx";
-import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
 
 const sections = [
@@ -31,33 +28,7 @@ function messageFrom(error) {
   return error.response?.data?.message ?? error.message ?? "Admin dashboard request failed.";
 }
 
-function AdminHeader({ user, onSignOut }) {
-  return (
-    <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-8">
-        <Link className="text-xl font-extrabold tracking-tight text-ink" to="/">
-          Study<span className="text-brand">Share</span>
-          <span className="ml-2 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-brand">Admin</span>
-        </Link>
-        <div className="flex items-center gap-3">
-          <span className="hidden text-sm font-medium text-slate-600 sm:inline">{user?.fullName}</span>
-          <NotificationBell />
-          <button
-            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            onClick={onSignOut}
-            type="button"
-          >
-            Sign out
-          </button>
-        </div>
-      </div>
-    </header>
-  );
-}
-
 export default function AdminDashboardPage() {
-  const { user, signOut } = useAuth();
-  const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState("overview");
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -79,18 +50,8 @@ export default function AdminDashboardPage() {
     loadOverview();
   }, []);
 
-  async function handleSignOut() {
-    try {
-      await signOut();
-      navigate("/admin/login", { replace: true });
-    } catch (requestError) {
-      setError(messageFrom(requestError));
-    }
-  }
-
   return (
     <main className="min-h-screen bg-slate-50">
-      <AdminHeader onSignOut={handleSignOut} user={user} />
       <section className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
         <div className="relative mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-ink via-[#253372] to-indigo-700 px-5 py-7 text-white shadow-[0_24px_70px_-35px_rgba(30,41,59,0.6)] sm:px-8 sm:py-9">
           <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-20 size-64 rounded-full border-[34px] border-white/[0.06]" />

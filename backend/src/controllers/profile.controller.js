@@ -6,7 +6,9 @@ import {
   usernamePattern,
 } from "../services/username.service.js";
 import {
+  deleteProfileImage,
   deleteProfilePhoto,
+  uploadProfileCover,
   uploadProfilePhoto,
 } from "../services/profile-photo.service.js";
 
@@ -57,6 +59,7 @@ function publicProfile(user) {
     course: user.course ?? "",
     department: user.department,
     avatarUrl: user.avatarUrl ?? "",
+    coverImage: user.coverImage ?? "",
     joinedAt: user.createdAt,
     role: user.role,
   };
@@ -69,7 +72,7 @@ export async function getPublicProfile(request, response) {
   }
 
   const user = await User.findOne({ username }).select(
-    "fullName username bio college university course department createdAt role",
+    "fullName username bio college university course department avatarUrl coverImage createdAt role",
   );
   if (!user) {
     const error = new Error("Profile not found.");
@@ -112,17 +115,20 @@ export async function getPublicProfile(request, response) {
 
 export async function updateOwnProfile(request, response) {
   const { removeAvatar, ...updates } = request.body ?? {};
+  const avatarFile = request.file ?? request.files?.avatar?.[0];
+  const coverFile = request.files?.cover?.[0];
   const allowedFields = ["fullName", "username", "bio", "college", "course"];
   const requestedFields = Object.keys(updates);
   if (
     (removeAvatar !== undefined && removeAvatar !== "true" && removeAvatar !== "false") ||
     requestedFields.some((field) => !allowedFields.includes(field)) ||
-    (requestedFields.length === 0 && !request.file && removeAvatar !== "true")
+    (requestedFields.length === 0 && !avatarFile && !coverFile && removeAvatar !== "true")
   ) {
     throw badRequest("Only name, username, bio, college, course, and profile photo may be updated.");
   }
 
-  const user = await User.findById(request.user._id).select("+avatarPublicId");
+  const user = await User.findById(request.user._id)
+    .select("+avatarPublicId +coverImagePublicId");
   if (!user) {
     const error = new Error("Profile not found.");
     error.statusCode = 404;
@@ -167,24 +173,32 @@ export async function updateOwnProfile(request, response) {
   }
 
   const oldAvatarPublicId = user.avatarPublicId;
-  let uploadedPhoto;
+  const oldCoverPublicId = user.coverImagePublicId;
+  let uploadedAvatar;
+  let uploadedCover;
   try {
-    if (request.file) {
-      uploadedPhoto = await uploadProfilePhoto(request.file);
-      user.avatarUrl = uploadedPhoto.url;
-      user.avatarPublicId = uploadedPhoto.publicId;
+    if (avatarFile) {
+      uploadedAvatar = await uploadProfilePhoto(avatarFile);
+      user.avatarUrl = uploadedAvatar.url;
+      user.avatarPublicId = uploadedAvatar.publicId;
     } else if (removeAvatar === "true") {
       user.avatarUrl = "";
       user.avatarPublicId = undefined;
     }
 
+    if (coverFile) {
+      uploadedCover = await uploadProfileCover(coverFile);
+      user.coverImage = uploadedCover.url;
+      user.coverImagePublicId = uploadedCover.publicId;
+    }
+
     await user.save();
   } catch (error) {
-    if (uploadedPhoto) {
+    for (const uploadedImage of [uploadedAvatar, uploadedCover].filter(Boolean)) {
       try {
-        await deleteProfilePhoto(uploadedPhoto.publicId);
+        await deleteProfileImage(uploadedImage.publicId);
       } catch (cleanupError) {
-        console.error("Could not clean up an incomplete profile photo upload.", cleanupError.code ?? "UNKNOWN");
+        console.error("Could not clean up an incomplete profile image upload.", cleanupError.code ?? "UNKNOWN");
       }
     }
     if (error?.code === 11000 && error.keyPattern?.username) {
@@ -198,6 +212,13 @@ export async function updateOwnProfile(request, response) {
       await deleteProfilePhoto(oldAvatarPublicId);
     } catch (error) {
       console.error("Could not remove the previous profile photo.", error.code ?? "UNKNOWN");
+    }
+  }
+  if (oldCoverPublicId && oldCoverPublicId !== user.coverImagePublicId) {
+    try {
+      await deleteProfileImage(oldCoverPublicId);
+    } catch (error) {
+      console.error("Could not remove the previous profile cover.", error.code ?? "UNKNOWN");
     }
   }
   response.json({ status: "success", profile: user.toSafeObject() });

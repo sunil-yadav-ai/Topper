@@ -10,7 +10,7 @@ import PyqReport from "../models/PyqReport.js";
 import RewardAccount from "../models/RewardAccount.js";
 import User from "../models/User.js";
 import { getPrivateNoteDownloadUrl } from "../services/note-storage.service.js";
-import { getPublicPyqPdfUrl } from "../services/pyq-storage.service.js";
+import { getPyqFileUrl } from "../services/pyq-storage.service.js";
 import { decryptJson } from "../services/encrypted-json.service.js";
 import {
   awardContribution,
@@ -327,7 +327,7 @@ export async function reviewAdminNote(request, response) {
       message: decision === "APPROVED"
         ? `"${note.title}" was manually approved and published.`
         : `"${note.title}" was manually rejected. Review the report and upload a corrected version.`,
-      link: "/dashboard",
+      link: "/library",
       dedupeKey,
     });
     if (decision === "REJECTED") {
@@ -336,7 +336,7 @@ export async function reviewAdminNote(request, response) {
         type: "corrections_required",
         title: "Corrections required",
         message: `Review the administrator's reason and verification findings for "${note.title}", then upload a corrected version. Your original notes remain unchanged.`,
-        link: "/dashboard",
+        link: "/library",
         dedupeKey: `note-corrections:admin:${note._id}:${note.moderatedAt.getTime()}`,
       });
     }
@@ -546,7 +546,7 @@ export async function listAdminPyqReports(request, response) {
             examinationYear: report.pyq.examinationYear,
             examType: report.pyq.examType,
             approvalStatus: report.pyq.approvalStatus,
-            reviewUrl: getPublicPyqPdfUrl(report.pyq.storage),
+            reviewUrl: getPyqFileUrl(report.pyq.storage),
           }
         : null,
     })),

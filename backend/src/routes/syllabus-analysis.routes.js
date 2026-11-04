@@ -3,6 +3,7 @@ import {
   confirmSyllabusAndFindResources,
   getSyllabusAnalysis,
   listSyllabusAnalyses,
+  regenerateSyllabusStructure,
   receiveSyllabusFile,
   updateSyllabusStructure,
   uploadSyllabus,
@@ -16,6 +17,7 @@ syllabusAnalysisRouter.get("/", listSyllabusAnalyses);
 syllabusAnalysisRouter.post("/", receiveSyllabusFile, uploadSyllabus);
 syllabusAnalysisRouter.get("/:analysisId", getSyllabusAnalysis);
 syllabusAnalysisRouter.put("/:analysisId", updateSyllabusStructure);
+syllabusAnalysisRouter.post("/:analysisId/regenerate", regenerateSyllabusStructure);
 syllabusAnalysisRouter.post(
   "/:analysisId/confirm",
   confirmSyllabusAndFindResources,

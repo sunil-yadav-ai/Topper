@@ -101,7 +101,7 @@ function serializeLibraryResource(resource, resourceType, bookmark) {
     title:
       resourceType === "note"
         ? resource.title
-        : `${resource.subject} - ${resource.examinationYear} ${resource.examType}`,
+        : resource.title || `${resource.subject} - ${resource.examinationYear} ${resource.examType}`,
     subject: resource.subject,
     department: resource.department,
     semester: resource.semester,
@@ -115,7 +115,8 @@ function serializeLibraryResource(resource, resourceType, bookmark) {
       description: resource.description,
       unit: resource.unit,
       topic: resource.topic,
-      university: resource.uploader?.university ?? "",
+      university: resource.university || resource.uploader?.university || "",
+      marks: resource.marks ?? null,
       college: resource.uploader?.college ?? "",
       batch: resource.uploader?.batch ?? "",
       fileFormat: resource.storage.format,
@@ -124,13 +125,13 @@ function serializeLibraryResource(resource, resourceType, bookmark) {
   }
   return {
     ...common,
-    description: `${resource.course} · ${resource.department}`,
+    description: resource.description || `${resource.course} · ${resource.department}`,
     university: resource.university,
     college: resource.college,
     batch: resource.uploader?.batch ?? "",
     examinationYear: resource.examinationYear,
     examType: resource.examType,
-    fileFormat: "pdf",
+    fileFormat: resource.storage.format ?? "pdf",
     downloadUrl: `/pyqs/${resource._id}/download`,
   };
 }

@@ -1,4 +1,9 @@
-import { markResourceHelpful, searchResources, suggestResources } from "../services/resource-search.service.js";
+import {
+  getResourceSearchOptions,
+  markResourceHelpful,
+  searchResources,
+  suggestResources,
+} from "../services/resource-search.service.js";
 import mongoose from "mongoose";
 import Note from "../models/Note.js";
 import { getPrivateNoteDownloadUrl } from "../services/note-storage.service.js";
@@ -18,6 +23,11 @@ export async function searchResourceCollection(request, response) {
 export async function suggestResourceCollection(request, response) {
   const result = await suggestResources(request.query);
   response.json({ status: "success", ...result });
+}
+
+export async function getResourceSearchOptionsCollection(request, response) {
+  const options = await getResourceSearchOptions(request.query.resourceType);
+  response.json({ status: "success", options });
 }
 
 export async function markSearchResultHelpful(request, response) {

@@ -8,6 +8,8 @@ const pyqSchema = new mongoose.Schema(
     course: { type: String, required: true, trim: true, maxlength: 120 },
     semester: { type: Number, required: true, min: 1, max: 12, index: true },
     subject: { type: String, required: true, trim: true, maxlength: 160, index: true },
+    title: { type: String, trim: true, maxlength: 200 },
+    description: { type: String, trim: true, maxlength: 2000 },
     examinationYear: {
       type: Number,
       required: true,
@@ -18,7 +20,17 @@ const pyqSchema = new mongoose.Schema(
     examType: {
       type: String,
       required: true,
-      enum: ["Midterm", "Final", "Supplementary", "Quiz", "Other"],
+      enum: [
+        "Mid Semester",
+        "End Semester",
+        "Internal",
+        "External",
+        "Midterm",
+        "Final",
+        "Supplementary",
+        "Quiz",
+        "Other",
+      ],
       index: true,
     },
     approvalStatus: {
@@ -42,6 +54,8 @@ const pyqSchema = new mongoose.Schema(
       publicId: { type: String, required: true },
       resourceType: { type: String, enum: ["raw"], required: true },
       accessType: { type: String, enum: ["authenticated", "upload"], default: "authenticated" },
+      format: { type: String, enum: ["pdf", "jpg", "jpeg", "png"], default: "pdf" },
+      mimeType: { type: String, default: "application/pdf" },
       bytes: { type: Number, required: true, min: 1, max: 20 * 1024 * 1024 },
     },
     uploadedBy: {

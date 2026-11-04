@@ -7,12 +7,15 @@ import {
 import { requireAuth } from "../middleware/auth.middleware.js";
 
 const profileRouter = Router();
-const receiveProfilePhoto = multer({
+const receiveProfileImages = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
-}).single("avatar");
+  limits: { fileSize: 8 * 1024 * 1024, files: 2 },
+}).fields([
+  { name: "avatar", maxCount: 1 },
+  { name: "cover", maxCount: 1 },
+]);
 
 profileRouter.get("/:username", getPublicProfile);
-profileRouter.patch("/me", requireAuth, receiveProfilePhoto, updateOwnProfile);
+profileRouter.patch("/me", requireAuth, receiveProfileImages, updateOwnProfile);
 
 export default profileRouter;

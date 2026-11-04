@@ -180,7 +180,7 @@ export async function createNoteCommunityReport(request, response) {
       `Note: ${note.title}`,
       `Details: ${explanation}`,
       suggestedCorrection ? `Suggested correction: ${suggestedCorrection}` : "",
-      "Sign in to your StudyShare dashboard to review and respond.",
+      "Sign in to EduRise to review and respond.",
     ]
       .filter(Boolean)
       .join("\n"),
@@ -191,7 +191,7 @@ export async function createNoteCommunityReport(request, response) {
       type: "mistake_reported",
       title: `A student reported an issue in "${note.title}"`,
       message: `${reporter?.fullName ?? "A student"} reported ${request.body.category.replaceAll("_", " ")} on page ${pageNumber}.${suggestedCorrection ? ` Suggested correction: ${suggestedCorrection}` : ""}`,
-      link: "/dashboard",
+      link: "/library",
       dedupeKey: `community-report:submitted:${report._id}`,
     });
   } catch (error) {
@@ -378,7 +378,7 @@ export async function reviewNoteCommunityReport(request, response) {
               ? "The issue was reviewed and confirmed. The original uploaded file remains unchanged."
               : "The report was reviewed and dismissed. No correction or contributor-point change was made.",
           ].filter(Boolean).join(" "),
-          link: "/dashboard",
+          link: "/library",
           dedupeKey: `community-report:resolved:${report._id}`,
         }),
       ),

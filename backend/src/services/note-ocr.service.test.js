@@ -140,3 +140,75 @@ test("surfaces Vision API failures without storing a success-shaped OCR result",
     globalThis.fetch = originalFetch;
   }
 });
+
+test("preserves the Vision API retry delay for rate-limited OCR requests", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) =>
+    String(url).startsWith("https://api.openai.com/")
+      ? new Response("rate limited", {
+          status: 429,
+          headers: { "Retry-After": "2" },
+        })
+      : new Response(Buffer.from([0xff, 0xd8, 0xff, 0xe0]), { status: 200 });
+
+  try {
+    await assert.rejects(
+      extractNoteText({
+        storage: {
+          provider: "cloudinary",
+          publicId: "test/note",
+          resourceType: "image",
+          format: "jpg",
+          mimeType: "image/jpeg",
+          bytes: 4,
+        },
+      }),
+      (error) => {
+        assert.match(error.message, /Vision API returned HTTP 429/);
+        assert.equal(error.retryAfterMs, 2000);
+        return true;
+      },
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("retries rate-limit errors but identifies exhausted API quota as non-retryable", async () => {
+  const originalFetch = globalThis.fetch;
+  let responseBody = {
+    error: { code: "rate_limit_exceeded" },
+  };
+  globalThis.fetch = async (url) =>
+    String(url).startsWith("https://api.openai.com/")
+      ? Response.json(responseBody, { status: 429 })
+      : new Response(Buffer.from([0xff, 0xd8, 0xff, 0xe0]), { status: 200 });
+
+  const note = {
+    storage: {
+      provider: "cloudinary",
+      publicId: "test/note",
+      resourceType: "image",
+      format: "jpg",
+      mimeType: "image/jpeg",
+      bytes: 4,
+    },
+  };
+
+  try {
+    await assert.rejects(extractNoteText(note), (error) => {
+      assert.equal(error.retryableRateLimit, true);
+      assert.equal(error.providerErrorCode, "rate_limit_exceeded");
+      return true;
+    });
+
+    responseBody = { error: { code: "insufficient_quota" } };
+    await assert.rejects(extractNoteText(note), (error) => {
+      assert.equal(error.retryableRateLimit, false);
+      assert.equal(error.providerErrorCode, "insufficient_quota");
+      return true;
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

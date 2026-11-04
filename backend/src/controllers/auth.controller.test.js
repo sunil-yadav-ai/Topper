@@ -119,6 +119,53 @@ test("logs in a student whose email has not been verified", async () => {
   }
 });
 
+test("admin login only accepts a role stored as admin in MongoDB", async () => {
+  const user = {
+    id: "student-123",
+    role: "user",
+    authVersion: 0,
+    isSuspended: false,
+    comparePassword: async () => true,
+    toSafeObject() {
+      return { id: this.id, role: this.role };
+    },
+  };
+  const originalFindOne = User.findOne;
+  User.findOne = () => ({ select: async () => user });
+
+  const response = {
+    cookies: [],
+    clearCookie() {},
+    cookie(name, value, options) {
+      this.cookies.push({ name, value, options });
+    },
+    json(payload) {
+      this.payload = payload;
+    },
+  };
+
+  try {
+    await assert.rejects(
+      authController.loginAdmin(
+        { body: { email: "student@example.com", password: "secure-password" } },
+        response,
+      ),
+      { statusCode: 401 },
+    );
+    assert.equal(response.cookies.length, 0);
+
+    user.role = "admin";
+    await authController.loginAdmin(
+      { body: { email: "admin@example.com", password: "secure-password" } },
+      response,
+    );
+    assert.equal(response.payload.user.role, "admin");
+    assert.equal(response.cookies.length, 1);
+  } finally {
+    User.findOne = originalFindOne;
+  }
+});
+
 test("refreshing the current user migrates the legacy auth cookie scope", async () => {
   const user = {
     id: "student-123",

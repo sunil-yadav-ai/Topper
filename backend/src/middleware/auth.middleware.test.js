@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 process.env.JWT_SECRET = "a".repeat(64);
-const [{ requireAuth, optionalAuth, requireRole, isAdmin }, User, authService] =
+const [{ requireAuth, optionalAuth, requireRole }, User, authService] =
   await Promise.all([
     import("./auth.middleware.js"),
     import("../models/User.js").then(({ default: model }) => model),
@@ -33,6 +33,45 @@ test("permits only the roles explicitly authorized by a route", () => {
     nextError = error;
   });
   assert.equal(nextError.statusCode, 403);
+});
+
+test("admin route middleware distinguishes unauthenticated and non-admin requests", async () => {
+  let unauthenticatedError;
+  await requireAuth({}, {}, (error) => {
+    unauthenticatedError = error;
+  });
+  assert.equal(unauthenticatedError.statusCode, 401);
+
+  const user = {
+    id: "user-123",
+    _id: "user-123",
+    role: "user",
+    authVersion: 0,
+    isSuspended: false,
+  };
+  const originalFindById = User.findById;
+  User.findById = () => ({ select: async () => user });
+
+  try {
+    const request = {
+      cookies: {
+        [authService.authCookieName]: authService.signAuthToken(user),
+      },
+    };
+    let authError;
+    await requireAuth(request, {}, (error) => {
+      authError = error;
+    });
+    assert.equal(authError, undefined);
+
+    let roleError;
+    requireRole("admin")(request, {}, (error) => {
+      roleError = error;
+    });
+    assert.equal(roleError.statusCode, 403);
+  } finally {
+    User.findById = originalFindById;
+  }
 });
 
 test("allows a JWT-authenticated user to continue without email verification", async () => {
@@ -89,7 +128,7 @@ test("optional authentication recognizes users without verified email", async ()
   }
 });
 
-test("admin authorization uses the current database role, not the token role", async () => {
+test("authentication reloads the current database role instead of trusting a token role", async () => {
   const user = {
     id: "user-123",
     _id: "user-123",
@@ -107,21 +146,26 @@ test("admin authorization uses the current database role, not the token role", a
       cookies: { [authService.authCookieName]: token },
     };
     let promotedError;
-    await isAdmin(promotedRequest, {}, (error) => {
+    await requireAuth(promotedRequest, {}, (error) => {
       promotedError = error;
     });
     assert.equal(promotedError, undefined);
     assert.equal(promotedRequest.user.role, "admin");
+    let adminRoleError;
+    requireRole("admin")(promotedRequest, {}, (error) => {
+      adminRoleError = error;
+    });
+    assert.equal(adminRoleError, undefined);
 
     user.role = "user";
+    const demotedRequest = {
+      cookies: { [authService.authCookieName]: token },
+    };
+    await requireAuth(demotedRequest, {}, () => {});
     let demotedError;
-    await isAdmin(
-      { cookies: { [authService.authCookieName]: token } },
-      {},
-      (error) => {
-        demotedError = error;
-      },
-    );
+    requireRole("admin")(demotedRequest, {}, (error) => {
+      demotedError = error;
+    });
     assert.equal(demotedError.statusCode, 403);
   } finally {
     User.findById = originalFindById;

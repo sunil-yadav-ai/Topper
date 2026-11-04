@@ -11,7 +11,10 @@ import {
   resetPassword,
   verifyEmail,
 } from "../controllers/auth.controller.js";
-import { isAdmin, requireAuth } from "../middleware/auth.middleware.js";
+import {
+  requireAuth,
+  requireRole,
+} from "../middleware/auth.middleware.js";
 
 const authRouter = Router();
 const authLimiter = rateLimit({
@@ -35,8 +38,13 @@ authRouter.post("/verify-email", verifyEmail);
 authRouter.post("/resend-verification", resendVerificationEmail);
 authRouter.post("/forgot-password", forgotPassword);
 authRouter.post("/reset-password", resetPassword);
-authRouter.get("/admin", isAdmin, (_request, response) => {
-  response.json({ status: "success", message: "Admin access granted." });
-});
+authRouter.get(
+  "/admin",
+  requireAuth,
+  requireRole("admin"),
+  (_request, response) => {
+    response.json({ status: "success", message: "Admin access granted." });
+  },
+);
 
 export default authRouter;

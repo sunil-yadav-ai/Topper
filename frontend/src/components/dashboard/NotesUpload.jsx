@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import FormField from "../FormField.jsx";
 import { api } from "../../lib/api.js";
+import { notifyResourceOptionsUpdated } from "../../lib/resource-options.js";
 
 const maxFileSize = 10 * 1024 * 1024;
 const allowedExtensions = new Set(["pdf", "jpg", "jpeg", "png"]);
@@ -189,6 +190,7 @@ export default function NotesUpload({ profile }) {
         },
       });
       await loadNotes();
+      notifyResourceOptionsUpdated();
       setSuccess(data.message);
       setFile(null);
       setForm((current) => ({ ...emptyForm, ...current, title: "", description: "", subject: "", unit: "", topic: "" }));
@@ -209,6 +211,7 @@ export default function NotesUpload({ profile }) {
     setDeletingId(note.id);
     try {
       await api.delete(`/notes/${note.id}`);
+      notifyResourceOptionsUpdated();
       setNotes((current) => current.filter((item) => item.id !== note.id));
       setOcrByNoteId((current) => {
         const next = { ...current };

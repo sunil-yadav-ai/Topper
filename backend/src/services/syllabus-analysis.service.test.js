@@ -6,6 +6,7 @@ process.env.OPENAI_SYLLABUS_MODEL = "test-syllabus-model";
 const {
   extractAndOrganizeSyllabus,
   normalizeSyllabusStructure,
+  organizeSyllabusPages,
   splitSyllabusPdfIntoPages,
   validateSyllabusFile,
 } = await import("./syllabus-analysis.service.js");
@@ -112,6 +113,32 @@ test("uses backend vision OCR and structured syllabus extraction", async () => {
     assert.match(requests[1].input[0].content[0].text, /do not infer or invent/i);
     assert.equal(requests[0].store, false);
     assert.equal(requests[0].model, "test-syllabus-model");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("regenerates an outline from the stored syllabus OCR text", async () => {
+  const originalFetch = globalThis.fetch;
+  let promptText = "";
+  globalThis.fetch = async (_url, options) => {
+    const request = JSON.parse(options.body);
+    promptText = request.input[0].content[0].text;
+    return Response.json({
+      output: [{ content: [{ type: "output_text", text: JSON.stringify(onePageSyllabus) }] }],
+    });
+  };
+
+  try {
+    const structure = await organizeSyllabusPages([
+      {
+        pageNumber: 2,
+        extractedText: "Actual syllabus heading\nUnit 1: Differentiation\nChain rule",
+      },
+    ]);
+    assert.deepEqual(structure, onePageSyllabus);
+    assert.match(promptText, /Actual syllabus heading/);
+    assert.match(promptText, /do not infer or invent/);
   } finally {
     globalThis.fetch = originalFetch;
   }

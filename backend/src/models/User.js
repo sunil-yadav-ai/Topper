@@ -80,6 +80,24 @@ const userSchema = new mongoose.Schema(
       },
     },
     avatarPublicId: { type: String, select: false },
+    coverImage: {
+      type: String,
+      trim: true,
+      maxlength: 2048,
+      default: "",
+      validate: {
+        validator(value) {
+          if (!value) return true;
+          try {
+            return ["http:", "https:"].includes(new URL(value).protocol);
+          } catch {
+            return false;
+          }
+        },
+        message: "Cover image URL must use HTTP or HTTPS.",
+      },
+    },
+    coverImagePublicId: { type: String, select: false },
     savedResources: {
       type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Resource" }],
       default: [],
@@ -133,6 +151,7 @@ userSchema.methods.toSafeObject = function toSafeObject() {
     batch: this.batch,
     semester: this.semester,
     avatarUrl: this.avatarUrl,
+    coverImage: this.coverImage,
     emailVerified: this.emailVerified,
   };
 };

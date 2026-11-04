@@ -21,6 +21,11 @@ const pollIntervalMs = 3000;
 let workerStarted = false;
 let processing = false;
 
+export function shouldExhaustOcrJob(error, attempts) {
+  if (error.retryableRateLimit === false) return true;
+  return error.retryableRateLimit !== true && attempts >= maxAttempts;
+}
+
 async function finalizeVerification({ note, job, report, model }) {
   const decision = decideNoteApproval(report);
   const completeReport = { ...report, ...decision };
@@ -98,7 +103,7 @@ async function finalizeVerification({ note, job, report, model }) {
         type: "note_approved",
         title: "Notes approved",
         message: `"${note.title}" passed AI verification and has been published.`,
-        link: "/dashboard",
+        link: "/library",
         dedupeKey: notificationKey,
       }),
     );
@@ -109,7 +114,7 @@ async function finalizeVerification({ note, job, report, model }) {
         type: "note_approved",
         title: "Notes approved with a warning",
         message: `"${note.title}" is published. Review the academic verification report for suggested corrections.`,
-        link: "/dashboard",
+        link: "/library",
         dedupeKey: notificationKey,
       }),
       createNotification({
@@ -117,7 +122,7 @@ async function finalizeVerification({ note, job, report, model }) {
         type: "corrections_required",
         title: "Review suggested corrections",
         message: `The verification report for "${note.title}" contains findings to review. Your original notes have not been changed.`,
-        link: "/dashboard",
+        link: "/library",
         dedupeKey: `note-corrections:ai:${note._id}`,
       }),
     );
@@ -128,7 +133,7 @@ async function finalizeVerification({ note, job, report, model }) {
         type: "note_rejected",
         title: "Notes not approved",
         message: `"${note.title}" was not approved. Review the detailed report and upload a corrected version.`,
-        link: "/dashboard",
+        link: "/library",
         dedupeKey: notificationKey,
       }),
       createNotification({
@@ -136,7 +141,7 @@ async function finalizeVerification({ note, job, report, model }) {
         type: "corrections_required",
         title: "Corrections required",
         message: `Review the suggested corrections for "${note.title}" before uploading a corrected version. Your original notes remain unchanged.`,
-        link: "/dashboard",
+        link: "/library",
         dedupeKey: `note-corrections:ai:${note._id}`,
       }),
     );
@@ -172,7 +177,12 @@ async function processNextOcrJob() {
   const job = await NoteOcrJob.findOneAndUpdate(
     {
       $or: [
-        { status: "queued" },
+        {
+          $and: [
+            { status: "queued" },
+            { $or: [{ retryAt: null }, { retryAt: { $lte: now } }] },
+          ],
+        },
         {
           status: "processing",
           leaseAt: { $lt: new Date(now.getTime() - leaseDurationMs) },
@@ -180,7 +190,7 @@ async function processNextOcrJob() {
       ],
     },
     {
-      $set: { status: "processing", leaseAt: now },
+      $set: { status: "processing", leaseAt: now, retryAt: null },
       $inc: { attempts: 1 },
     },
     { sort: { createdAt: 1 }, new: true },
@@ -209,7 +219,7 @@ async function processNextOcrJob() {
     );
     await Promise.all([
       job.updateOne({
-        $set: { status: "completed", leaseAt: null, lastError: "" },
+        $set: { status: "completed", leaseAt: null, retryAt: null, lastError: "" },
       }),
       Note.updateOne(
         { _id: note._id },
@@ -224,15 +234,22 @@ async function processNextOcrJob() {
     ]);
   } catch (error) {
     console.error(`OCR processing failed for note ${note._id}:`, error);
-    const exhausted = job.attempts >= maxAttempts;
-    const message = exhausted
-      ? "Text extraction failed after several attempts. Your original note is unchanged."
-      : "Text extraction failed temporarily and will be retried.";
+    const quotaUnavailable = error.retryableRateLimit === false;
+    const exhausted = shouldExhaustOcrJob(error, job.attempts);
+    const message = quotaUnavailable
+      ? "Text extraction is unavailable because the AI provider quota is exhausted. Contact support."
+      : exhausted
+        ? "Text extraction failed after several attempts. Your original note is unchanged."
+        : "Text extraction failed temporarily and will be retried.";
+    const retryDelayMs = Number.isFinite(error.retryAfterMs)
+      ? Math.max(0, error.retryAfterMs)
+      : Math.min(1000 * 2 ** (job.attempts - 1), 30_000);
     await Promise.all([
       job.updateOne({
         $set: {
           status: exhausted ? "failed" : "queued",
           leaseAt: null,
+          retryAt: exhausted ? null : new Date(Date.now() + retryDelayMs),
           lastError: message,
         },
       }),
@@ -324,7 +341,7 @@ async function processNextVerificationJob() {
       type: "verification_started",
       title: "AI verification started",
       message: `OCR is complete. AI academic verification has started for "${note.title}".`,
-      link: "/dashboard",
+      link: "/library",
       dedupeKey: `note-verification-started:${note._id}:${job.attempts}`,
     });
   } catch (error) {

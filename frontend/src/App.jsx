@@ -1,12 +1,11 @@
 import { lazy, Suspense, useEffect } from "react";
-import { Link, Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import "lenis/dist/lenis.css";
 import Panel from "./components/Panel.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
 import { api } from "./lib/api.js";
 import ApplicationLayout from "./components/SiteChrome.jsx";
 import { PageLoader } from "./components/PageState.jsx";
-import DashboardPage from "./pages/DashboardPage.jsx";
 import AdminDashboardPage from "./pages/AdminDashboardPage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
 import AdvertisingDisclosurePage from "./pages/AdvertisingDisclosurePage.jsx";
@@ -14,8 +13,10 @@ import PyqsPage from "./pages/PyqsPage.jsx";
 import ResourceSearchPage from "./pages/ResourceSearchPage.jsx";
 import LibraryPage from "./pages/LibraryPage.jsx";
 import SyllabusAnalysisPage from "./pages/SyllabusAnalysisPage.jsx";
+import UploadPage from "./pages/UploadPage.jsx";
 import TermsPage from "./pages/TermsPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
+import { getPostLoginPath } from "./lib/navigation.js";
 import {
   ForgotPasswordPage,
   LoginPage,
@@ -56,11 +57,14 @@ export default function App() {
         <Route path="/advertising" element={<AdvertisingDisclosurePage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/library" element={<ProtectedPage><LibraryPage /></ProtectedPage>} />
+        <Route path="/uploads" element={<ProtectedPage><UploadPage /></ProtectedPage>} />
+        <Route path="/upload" element={<ProtectedPage><UploadPage /></ProtectedPage>} />
         <Route path="/notifications" element={<AuthenticatedPage><NotificationsPage /></AuthenticatedPage>} />
         <Route path="/syllabus" element={<ProtectedPage><SyllabusAnalysisPage /></ProtectedPage>} />
-        <Route path="/dashboard" element={<ProtectedPage><DashboardPage /></ProtectedPage>} />
+        <Route path="/dashboard" element={<Navigate to="/search" replace />} />
         <Route path="/profile/:username" element={<ProfilePage />} />
         <Route path="/admin" element={<ProtectedPage admin><AdminDashboardPage /></ProtectedPage>} />
+        <Route path="/admin/dashboard" element={<ProtectedPage admin><AdminDashboardPage /></ProtectedPage>} />
       </Route>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/admin/login" element={<LoginPage admin />} />
@@ -86,8 +90,8 @@ function ProtectedPage({ children, admin = false }) {
   if (!user) {
     return <Navigate to={admin ? "/admin/login" : "/login"} replace />;
   }
-  if ((user.role === "admin") !== admin) {
-    return <Navigate to={user.role === "admin" ? "/admin" : "/dashboard"} replace />;
+  if ((admin && user.role !== "admin") || (!admin && user.role !== "user")) {
+    return <Navigate to={getPostLoginPath(user)} replace />;
   }
 
   return children;

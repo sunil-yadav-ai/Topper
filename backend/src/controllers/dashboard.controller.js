@@ -1,9 +1,11 @@
 import mongoose from "mongoose";
 import Activity from "../models/Activity.js";
 import Note from "../models/Note.js";
+import Pyq from "../models/Pyq.js";
 import Resource from "../models/Resource.js";
 import User from "../models/User.js";
 import Bookmark from "../models/Bookmark.js";
+import StudentResourceAccess from "../models/StudentResourceAccess.js";
 
 const profileFields = [
   "fullName",
@@ -74,6 +76,8 @@ export async function getStudentDashboard(request, response) {
   const [
     resourceStatsResult,
     noteStatsResult,
+    pyqStatsResult,
+    downloadStatsResult,
     savedResources,
     storedActivities,
     recentResources,
@@ -130,6 +134,19 @@ export async function getStudentDashboard(request, response) {
           },
         },
       ]),
+      Pyq.aggregate([
+        { $match: { uploadedBy: userId } },
+        { $group: { _id: null, totalUploadedPyqs: { $sum: 1 } } },
+      ]),
+      StudentResourceAccess.aggregate([
+        { $match: { user: userId } },
+        {
+          $group: {
+            _id: null,
+            totalDownloads: { $sum: { $ifNull: ["$downloadCount", 0] } },
+          },
+        },
+      ]),
       Resource.find({
         _id: { $in: profile.savedResources },
         status: "approved",
@@ -153,6 +170,8 @@ export async function getStudentDashboard(request, response) {
 
   const resourceStats = resourceStatsResult[0] ?? {};
   const noteStats = noteStatsResult[0] ?? {};
+  const pyqStats = pyqStatsResult[0] ?? {};
+  const downloadStats = downloadStatsResult[0] ?? {};
   const savedResourceIds = profile.savedResources.map((id) => id.toString());
   const recentActivity = [
     ...storedActivities.map(formatStoredActivity),
@@ -177,7 +196,14 @@ export async function getStudentDashboard(request, response) {
     stats: {
       totalUploadedNotes:
         (resourceStats.totalUploadedNotes ?? 0) + (noteStats.totalUploadedNotes ?? 0),
-      totalUploadedPyqs: resourceStats.totalUploadedPyqs ?? 0,
+      totalUploadedPyqs:
+        (resourceStats.totalUploadedPyqs ?? 0) + (pyqStats.totalUploadedPyqs ?? 0),
+      totalDownloads: downloadStats.totalDownloads ?? 0,
+      myContributions:
+        (resourceStats.totalUploadedNotes ?? 0) +
+        (resourceStats.totalUploadedPyqs ?? 0) +
+        (noteStats.totalUploadedNotes ?? 0) +
+        (pyqStats.totalUploadedPyqs ?? 0),
       approvedResources: resourceStats.approvedResources ?? 0,
       rejectedResources: resourceStats.rejectedResources ?? 0,
       pendingVerification:
