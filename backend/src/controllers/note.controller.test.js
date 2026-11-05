@@ -8,6 +8,7 @@ test("published note subject counts are limited to approved notes in the student
   const filter = {
     department: { $regex: "^CSE$", $options: "i" },
     publicationStatus: "published",
+    visibility: { $in: ["public", null] },
     approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
   };
   Note.aggregate = async (pipeline) => {
@@ -40,6 +41,7 @@ test("published notes include safe uploader details and support pagination", asy
   const filter = {
     department: { $regex: "^CSE$", $options: "i" },
     publicationStatus: "published",
+    visibility: { $in: ["public", null] },
     approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
     subject: { $regex: "^Computer Graphics$", $options: "i" },
   };

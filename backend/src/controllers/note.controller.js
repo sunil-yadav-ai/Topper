@@ -98,6 +98,7 @@ function serializeNote(note, request) {
     mistakePercentage: note.mistakePercentage ?? null,
     humanReviewReason: note.humanReviewReason ?? "",
     publicationStatus: note.publicationStatus ?? "private",
+    visibility: note.visibility ?? "private",
     ocrStatus: note.ocrStatus ?? "queued",
     ocrPageCount: note.ocrPageCount ?? null,
     ocrError: note.ocrError ?? null,
@@ -204,6 +205,7 @@ async function createNoteSubmission({
       revisionNumber,
       approvalDecision: "PENDING",
       publicationStatus: "private",
+      visibility: "private",
     });
     await createNotification({
       recipient: uploadedBy,
@@ -332,6 +334,7 @@ export async function getPublishedNotes(request, response) {
       $options: "i",
     },
     publicationStatus: "published",
+    visibility: { $in: ["public", null] },
     approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
   };
   if (typeof request.query.subject === "string" && request.query.subject.trim()) {
@@ -409,6 +412,7 @@ export async function downloadMyNote(request, response) {
       { uploadedBy: request.user._id },
       {
         publicationStatus: "published",
+        visibility: { $in: ["public", null] },
         approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
       },
     ],

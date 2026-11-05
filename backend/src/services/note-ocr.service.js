@@ -137,6 +137,7 @@ async function callVisionModel(page) {
       error.retryableRateLimit = ![
         "insufficient_quota",
         "billing_hard_limit_reached",
+        "credit_balance_exhausted",
       ].includes(providerErrorCode);
       const retryAfter = response.headers.get("retry-after");
       if (retryAfter !== null) {

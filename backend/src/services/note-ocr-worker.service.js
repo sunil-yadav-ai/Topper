@@ -11,7 +11,10 @@ import {
 } from "./note-ocr.service.js";
 import { decryptJson, encryptJson } from "./encrypted-json.service.js";
 import { verifyAcademicNotes } from "./note-verification.service.js";
-import { decideNoteApproval } from "./note-approval.service.js";
+import {
+  decideNoteApproval,
+  getNotePublicationFields,
+} from "./note-approval.service.js";
 import { sendNoteDecisionEmail } from "./note-decision-notification.service.js";
 import { awardContribution } from "./reward.service.js";
 
@@ -28,6 +31,7 @@ export function shouldExhaustOcrJob(error, attempts) {
 
 async function finalizeVerification({ note, job, report, model }) {
   const decision = decideNoteApproval(report);
+  const publicationFields = getNotePublicationFields(decision.decision);
   const completeReport = { ...report, ...decision };
   const encryptedReport = encryptJson(completeReport);
   const revisionRoot = note.revisionRoot ?? note._id;
@@ -82,11 +86,7 @@ async function finalizeVerification({ note, job, report, model }) {
           confirmedErrorCount: decision.confirmedErrorCount,
           mistakePercentage: decision.mistakePercentage,
           humanReviewReason: decision.humanReviewReason,
-          publicationStatus: ["APPROVED", "APPROVED_WITH_WARNING"].includes(
-            decision.decision,
-          )
-            ? "published"
-            : "private",
+          ...publicationFields,
         },
       },
     ),

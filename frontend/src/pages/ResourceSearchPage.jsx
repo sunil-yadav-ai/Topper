@@ -14,7 +14,7 @@ import {
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
 import {
-  resourceOptionsUpdatedEvent,
+  subscribeResourceOptionsUpdated,
 } from "../lib/resource-options.js";
 import { gsap } from "../lib/gsap.js";
 import AdUnit from "../components/AdUnit.jsx";
@@ -89,6 +89,7 @@ export default function ResourceSearchPage() {
   });
   const [optionsLoading, setOptionsLoading] = useState(true);
   const [optionsError, setOptionsError] = useState("");
+  const [searchRefresh, setSearchRefresh] = useState(0);
   const [resources, setResources] = useState([]);
   const [pagination, setPagination] = useState({ pages: 0, total: 0 });
   const [page, setPage] = useState(1);
@@ -142,11 +143,19 @@ export default function ResourceSearchPage() {
       }
     };
     void loadOptions();
-    window.addEventListener(resourceOptionsUpdatedEvent, loadOptions);
-    const refreshTimer = window.setInterval(() => void loadOptions(), 30_000);
+    const refreshSearch = () => setSearchRefresh((current) => current + 1);
+    const unsubscribe = subscribeResourceOptionsUpdated(() => {
+      void loadOptions();
+      refreshSearch();
+    });
+    const refreshTimer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void loadOptions();
+      refreshSearch();
+    }, 10_000);
     return () => {
       active = false;
-      window.removeEventListener(resourceOptionsUpdatedEvent, loadOptions);
+      unsubscribe();
       window.clearInterval(refreshTimer);
     };
   }, []);
@@ -168,7 +177,7 @@ export default function ResourceSearchPage() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [searchParams]);
+  }, [searchParams, searchRefresh]);
 
   useEffect(() => {
     if (activeTab !== "note" || topicPrefix.length < 2) {

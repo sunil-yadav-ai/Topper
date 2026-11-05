@@ -289,6 +289,7 @@ export async function reviewAdminNote(request, response) {
       $set: {
         approvalDecision: decision,
         publicationStatus: decision === "APPROVED" ? "published" : "private",
+        visibility: decision === "APPROVED" ? "public" : "private",
         decisionSource: "admin",
         moderatedBy: request.user._id,
         moderatedAt: new Date(),

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { decideNoteApproval } from "./note-approval.service.js";
+import {
+  decideNoteApproval,
+  getNotePublicationFields,
+} from "./note-approval.service.js";
 
 function report(totalVerifiableStatements, classifications, overrides = {}) {
   return {
@@ -16,14 +19,9 @@ function report(totalVerifiableStatements, classifications, overrides = {}) {
   };
 }
 
-test("uses confirmed errors only and approves at exactly five percent", () => {
+test("approves at exactly five percent when verification findings are resolved", () => {
   const decision = decideNoteApproval(
-    report(20, [
-      "CONFIRMED_ERROR",
-      "UNCERTAIN",
-      "UNCERTAIN",
-      "NO_ISSUE_DETECTED",
-    ]),
+    report(20, ["CONFIRMED_ERROR"]),
     5,
   );
 
@@ -31,6 +29,38 @@ test("uses confirmed errors only and approves at exactly five percent", () => {
   assert.equal(decision.confirmedErrorCount, 1);
   assert.equal(decision.verifiableStatementCount, 20);
   assert.equal(decision.mistakePercentage, 5);
+});
+
+test("keeps normal academic uncertainty eligible but holds safety and copyright concerns", () => {
+  const normalUncertainty = decideNoteApproval(
+    report(20, [], {
+      issues: [{ classification: "UNCERTAIN", errorCategory: "factual_inaccuracy" }],
+    }),
+    5,
+  );
+  assert.equal(normalUncertainty.decision, "APPROVED");
+
+  for (const issue of [
+    {
+      classification: "CONFIRMED_ERROR",
+      errorCategory: "potential_safety_concern",
+    },
+    {
+      classification: "CONFIRMED_ERROR",
+      errorCategory: "potential_copyright_concern",
+    },
+    {
+      classification: "CONFIRMED_ERROR",
+      errorCategory: "other_content_concern",
+    },
+  ]) {
+    const decision = decideNoteApproval(
+      report(20, [], { issues: [issue] }),
+      5,
+    );
+    assert.equal(decision.decision, "NEEDS_HUMAN_REVIEW");
+    assert.equal(decision.mistakePercentage, null);
+  }
 });
 
 test("approves with warning at ten percent and rejects only above ten percent", () => {
@@ -76,4 +106,21 @@ test("requires human review for too few statements or unreliable analysis", () =
   assert.equal(unreadable.decision, "NEEDS_HUMAN_REVIEW");
   assert.equal(unreadable.confirmedErrorCount, 0);
   assert.equal(unreadable.mistakePercentage, null);
+});
+
+test("publishes only approved decisions and keeps review or rejected notes private", () => {
+  assert.deepEqual(getNotePublicationFields("APPROVED"), {
+    publicationStatus: "published",
+    visibility: "public",
+  });
+  assert.deepEqual(getNotePublicationFields("APPROVED_WITH_WARNING"), {
+    publicationStatus: "published",
+    visibility: "public",
+  });
+  for (const decision of ["PENDING", "NEEDS_HUMAN_REVIEW", "REJECTED"]) {
+    assert.deepEqual(getNotePublicationFields(decision), {
+      publicationStatus: "private",
+      visibility: "private",
+    });
+  }
 });

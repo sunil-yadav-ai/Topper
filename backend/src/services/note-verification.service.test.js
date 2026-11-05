@@ -104,6 +104,8 @@ test("requires OCR provenance and actual academic citations to confirm errors", 
     assert.ok(requestHeaders.Authorization.startsWith("Bearer "));
     assert.match(request.instructions, /definitions, formulas, calculations/i);
     assert.match(request.instructions, /contradictions/i);
+    assert.match(request.instructions, /potential_safety_concern/i);
+    assert.match(request.instructions, /potential_copyright_concern/i);
     assert.deepEqual(request.tools[0].filters.allowed_domains, [
       "openstax.org",
       "nist.gov",
@@ -124,6 +126,71 @@ test("requires OCR provenance and actual academic citations to confirm errors", 
     assert.equal(result.report.issues[3].confidence, 0.62);
     assert.equal(result.report.totalVerifiableStatements, 20);
     assert.equal(result.report.analysisReliable, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("accepts uncertain safety and copyright findings for human review", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    Response.json({
+      output: [
+        {
+          content: [
+            {
+              type: "output_text",
+              text: JSON.stringify({
+                issues: [
+                  issue({
+                    errorCategory: "potential_copyright_concern",
+                    classification: "UNCERTAIN",
+                    referenceUrls: [],
+                  }),
+                ],
+                pages: [
+                  {
+                    pageNumber: 1,
+                    verifiableStatementCount: 20,
+                    analysisReliable: true,
+                    analysisLimitations: [],
+                  },
+                ],
+              }),
+              annotations: [],
+            },
+          ],
+        },
+      ],
+    });
+
+  try {
+    const result = await verifyAcademicNotes({
+      note: {
+        title: "Calculus",
+        description: "Derivative rules",
+        department: "Mathematics",
+        semester: 1,
+        subject: "Calculus",
+        unit: "Derivatives",
+        topic: "Power rule",
+      },
+      ocrResult: {
+        pages: [
+          {
+            pageNumber: 1,
+            extractedText: "The derivative of x^2 is 2x.",
+            recognizedFormulas: [],
+            readabilityStatus: "readable",
+            ocrConfidence: 0.95,
+            unclearRegions: [],
+          },
+        ],
+      },
+    });
+
+    assert.equal(result.report.issues[0].errorCategory, "potential_copyright_concern");
+    assert.equal(result.report.issues[0].classification, "UNCERTAIN");
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -208,6 +208,13 @@ test("retries rate-limit errors but identifies exhausted API quota as non-retrya
       assert.equal(error.providerErrorCode, "insufficient_quota");
       return true;
     });
+
+    responseBody = { error: { code: "credit_balance_exhausted" } };
+    await assert.rejects(extractNoteText(note), (error) => {
+      assert.equal(error.retryableRateLimit, false);
+      assert.equal(error.providerErrorCode, "credit_balance_exhausted");
+      return true;
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }

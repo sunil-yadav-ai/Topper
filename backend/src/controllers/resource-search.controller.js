@@ -53,6 +53,7 @@ export async function downloadApprovedNote(request, response) {
     {
       _id: request.params.noteId,
       publicationStatus: "published",
+      visibility: { $in: ["public", null] },
       approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
     },
     { $inc: { downloadCount: 1 } },

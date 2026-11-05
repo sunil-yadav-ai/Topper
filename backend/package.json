@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "test": "node --test",
     "test-email": "node src/scripts/testEmail.js",
-    "create-admin": "node src/scripts/createAdmin.js"
+    "create-admin": "node src/scripts/createAdmin.js",
+    "retry-failed-note-ocr": "node src/scripts/retry-failed-note-ocr.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

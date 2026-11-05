@@ -88,6 +88,7 @@ test("builds case-insensitive dynamic filter options from searchable resources",
   const originalUserDistinct = User.distinct;
   const noteFilter = {
     publicationStatus: "published",
+    visibility: { $in: ["public", null] },
     approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
   };
   const pyqFilter = { approvalStatus: "approved" };
@@ -157,6 +158,7 @@ test("builds case-insensitive dynamic filter options from searchable resources",
 
 test("note schema uses publicationStatus rather than isPublished for search eligibility", () => {
   assert.ok(Note.schema.path("publicationStatus"));
+  assert.ok(Note.schema.path("visibility"));
   assert.equal(Note.schema.path("isPublished"), undefined);
 });
 
@@ -166,6 +168,7 @@ test("combines subject, topic, and university filters and returns the matching c
   const originalUserDistinct = User.distinct;
   const filter = {
     publicationStatus: "published",
+    visibility: { $in: ["public", null] },
     approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
     subject: /^Computer Graphics$/i,
     university: /^PTU$/i,
@@ -183,6 +186,7 @@ test("combines subject, topic, and university filters and returns the matching c
     department: "Computer Science",
     subject: "Computer Graphics",
     university: "PTU",
+    visibility: "public",
     topic: "Rendering",
     unit: "Unit 1",
     semester: 4,

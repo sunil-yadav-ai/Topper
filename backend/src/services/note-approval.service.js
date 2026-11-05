@@ -7,12 +7,23 @@ export function decideNoteApproval(
   const verifiableStatementCount = Number.isInteger(report.totalVerifiableStatements)
     ? report.totalVerifiableStatements
     : 0;
+  const issues = Array.isArray(report.issues) ? report.issues : [];
   const confirmedErrorCount = (report.issues ?? []).filter(
     (issue) => issue.classification === "CONFIRMED_ERROR",
   ).length;
   const unreadablePageCount = report.unreadablePageCount ?? 0;
+  const unresolvedConcern = issues.some(
+    (issue) =>
+      [
+        "potential_safety_concern",
+        "potential_copyright_concern",
+        "other_content_concern",
+      ].includes(issue.errorCategory),
+  );
   const humanReviewReason =
-    !report.analysisReliable ||
+    unresolvedConcern
+      ? "An unresolved verification concern requires human review."
+      : !report.analysisReliable ||
     !Array.isArray(report.pages) ||
     (report.pages.length > 0 && unreadablePageCount === report.pages.length)
       ? "The document could not be reliably analyzed; human review is required."
@@ -43,5 +54,13 @@ export function decideNoteApproval(
     confirmedErrorCount,
     mistakePercentage,
     humanReviewReason: "",
+  };
+}
+
+export function getNotePublicationFields(decision) {
+  const isApproved = ["APPROVED", "APPROVED_WITH_WARNING"].includes(decision);
+  return {
+    publicationStatus: isApproved ? "published" : "private",
+    visibility: isApproved ? "public" : "private",
   };
 }

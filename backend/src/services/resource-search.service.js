@@ -108,6 +108,7 @@ function createTextSearch(q) {
 function createNoteFilter(filters, uploaderIds, legacyUniversityIds) {
   const filter = {
     publicationStatus: "published",
+    visibility: { $in: ["public", null] },
     approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
   };
   if (filters.q) Object.assign(filter, createTextSearch(filters.q));
@@ -173,6 +174,7 @@ function createPyqFilter(filters, uploaderIds) {
 
 const approvedNoteFilter = {
   publicationStatus: "published",
+  visibility: { $in: ["public", null] },
   approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
 };
 const approvedPyqFilter = { approvalStatus: "approved" };
@@ -187,6 +189,7 @@ async function getNoteStatusBreakdown() {
       $group: {
         _id: {
           publicationStatus: { $ifNull: ["$publicationStatus", "(missing)"] },
+          visibility: { $ifNull: ["$visibility", "(missing)"] },
           approvalDecision: { $ifNull: ["$approvalDecision", "(missing)"] },
           ocrStatus: { $ifNull: ["$ocrStatus", "(missing)"] },
           verificationStatus: { $ifNull: ["$verificationStatus", "(missing)"] },
@@ -588,6 +591,7 @@ export async function markResourceHelpful(resourceType, resourceId, userId) {
     ? {
         _id: resourceId,
         publicationStatus: "published",
+        visibility: { $in: ["public", null] },
         approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
       }
     : { _id: resourceId, approvalStatus: "approved" };

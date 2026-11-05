@@ -62,6 +62,12 @@ const noteSchema = new mongoose.Schema(
       default: "PENDING",
       index: true,
     },
+    visibility: {
+      type: String,
+      enum: ["private", "public"],
+      default: "private",
+      index: true,
+    },
     decisionSource: {
       type: String,
       enum: ["ai", "admin"],
