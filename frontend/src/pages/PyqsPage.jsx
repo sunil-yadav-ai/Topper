@@ -253,7 +253,7 @@ export default function PyqsPage() {
               Previous year question papers
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-              Find, download, and share past papers. Every paper is free to access.
+              Find, view, and share past papers. Every paper is free to view.
             </p>
           </div>
           <p className="rounded-full bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-800 sm:text-sm">
@@ -434,7 +434,7 @@ export default function PyqsPage() {
             <AdUnit className="mb-5" placement="pyqs" />
             <div className="ed-pyq-results-bar mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
               <p className="text-sm text-slate-600">
-                {bookmarksOnly ? `${pyqs.length} saved papers` : `${pagination.total} free papers`}
+                {bookmarksOnly ? `${pyqs.length} saved papers` : `${pagination.total} public papers`}
               </p>
               {!user && (
                 <Link className="text-sm font-semibold text-brand hover:underline" to="/register">
@@ -458,7 +458,7 @@ export default function PyqsPage() {
                 {pyqs.map((pyq) => (
                   <article className="ed-pyq-card flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md sm:p-5" data-ed-animate key={pyq.id}>
                     <div className="flex items-start justify-between gap-3">
-                      <span className="rounded-lg bg-rose-50 px-2.5 py-1 text-xs font-bold uppercase text-rose-700">PDF · Free</span>
+                      <span className="rounded-lg bg-rose-50 px-2.5 py-1 text-xs font-bold uppercase text-rose-700">{pyq.fileFormat?.toUpperCase()} · Public</span>
                       <span className="rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-brand">
                         Semester {pyq.semester}
                       </span>
@@ -475,16 +475,14 @@ export default function PyqsPage() {
                         Shared by {pyq.uploadedBy}
                       </Link>
                     )}
-                    <p className="mt-2 text-xs text-slate-400">{formatSize(pyq.fileSize)} · {pyq.downloadCount} downloads</p>
+                    <p className="mt-2 text-xs text-slate-400">{formatSize(pyq.fileSize)} · Shared by students</p>
                     <div className="mt-auto flex flex-wrap items-center gap-2 pt-5">
-                      <a
+                      <Link
                         className="inline-flex flex-1 items-center justify-center rounded-xl bg-brand px-3 py-2.5 text-sm font-bold text-white hover:bg-indigo-700"
-                        href={`${api.defaults.baseURL}/pyqs/${pyq.id}/download`}
-                        rel="noreferrer"
-                        target="_blank"
+                        to={`/resources/pyq/${pyq.id}`}
                       >
-                        Download free
-                      </a>
+                        View Resource
+                      </Link>
                       {user?.role === "user" && (
                         <button
                           aria-label={pyq.isBookmarked ? "Remove bookmark" : "Bookmark paper"}

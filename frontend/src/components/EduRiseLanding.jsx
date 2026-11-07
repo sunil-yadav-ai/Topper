@@ -290,7 +290,7 @@ function SubjectVault() {
                         : (subject.name === "More subjects" ? counts.all : counts[subject.name]) === undefined
                           ? "Finding your collection…"
                           : subject.name === "More subjects"
-                            ? <>Browse all <span data-resource-count={counts.all}>{counts.all.toLocaleString()}</span> approved resources</>
+                            ? <>Browse all <span data-resource-count={counts.all}>{counts.all.toLocaleString()}</span> published resources</>
                             : <><span data-resource-count={counts[subject.name]}>{counts[subject.name].toLocaleString()}</span> resource{counts[subject.name] === 1 ? "" : "s"} to explore</>}
                     </p>
                   </div>

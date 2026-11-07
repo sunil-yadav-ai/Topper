@@ -6,7 +6,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
-  Download,
   FileText,
   RotateCcw,
   Search,
@@ -23,8 +22,9 @@ import { EmptyState, PageLoader } from "../components/PageState.jsx";
 gsap.registerPlugin(useGSAP);
 
 const pageSize = 12;
-const emptyNoteFilters = { subject: "", topic: "", university: "" };
-const emptyPyqFilters = { subject: "", university: "", examinationYear: "" };
+const noteMarksOptions = ["2", "3", "4", "5", "6", "8", "10", "12", "15", "20"];
+const emptyNoteFilters = { subject: "", topic: "", university: "", marks: "" };
+const emptyPyqFilters = { q: "", subject: "", university: "", examinationYear: "" };
 
 function errorText(error) {
   return error.response?.data?.message ?? error.message ?? "Search failed.";
@@ -164,19 +164,24 @@ export default function ResourceSearchPage() {
     const controller = new AbortController();
     setLoading(true);
     setError("");
-    api
-      .get("/search", { params: searchParams, signal: controller.signal })
-      .then(({ data }) => {
-        setResources(data.resources);
-        setPagination(data.pagination);
-      })
-      .catch((requestError) => {
-        if (requestError.name !== "CanceledError") setError(errorText(requestError));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
+    const timer = window.setTimeout(() => {
+      api
+        .get("/search", { params: searchParams, signal: controller.signal })
+        .then(({ data }) => {
+          setResources(data.resources);
+          setPagination(data.pagination);
+        })
+        .catch((requestError) => {
+          if (requestError.name !== "CanceledError") setError(errorText(requestError));
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setLoading(false);
+        });
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
   }, [searchParams, searchRefresh]);
 
   useEffect(() => {
@@ -340,7 +345,7 @@ export default function ResourceSearchPage() {
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand sm:text-sm">The EduRise resource library</p>
           <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Find your next study resource</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-            Explore verified student notes and approved previous-year question papers.
+            Explore student notes and previous-year question papers. AI verification results are shown separately from publication.
           </p>
         </header>
 
@@ -386,7 +391,7 @@ export default function ResourceSearchPage() {
           )}
 
           {activeTab === "note" ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1.2fr_1fr]">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <SelectField
                 label="Subject"
                 name="subject"
@@ -446,9 +451,24 @@ export default function ResourceSearchPage() {
                 disabled={optionsLoading || options.note.universities.length === 0}
                 value={noteDraft.university}
               />
+              <SelectField
+                label="Marks"
+                name="marks"
+                onChange={updateDraft}
+                options={noteMarksOptions}
+                placeholder="All Marks"
+                value={noteDraft.marks}
+              />
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <TextField
+                label="Search question papers"
+                name="q"
+                onChange={updateDraft}
+                placeholder="Subject, course, or keyword"
+                value={pyqDraft.q}
+              />
               <SelectField
                 label="Subject"
                 name="subject"
@@ -497,6 +517,14 @@ export default function ResourceSearchPage() {
             </div>
           )}
 
+          {activeTab === "pyq" &&
+            !optionsLoading &&
+            options.pyq.subjects.length === 0 && (
+              <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                No question papers are available yet. Papers appear here as soon as they are uploaded.
+              </p>
+            )}
+
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <button className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:shadow-md disabled:opacity-60" disabled={optionsLoading} type="submit">
               <Search aria-hidden="true" size={17} />
@@ -508,7 +536,7 @@ export default function ResourceSearchPage() {
             </button>
             {optionsLoading && <span className="text-xs text-slate-500">Loading available filters…</span>}
             <span className="text-xs text-slate-500">
-              Options update from uploads; results include verified notes and approved question papers.
+              Filters update from uploads. OCR and AI verification status never hide a published resource.
             </span>
           </div>
         </form>
@@ -517,34 +545,33 @@ export default function ResourceSearchPage() {
           <AdUnit className="mb-5" placement="search" />
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3" data-search-animate>
             <p className="text-sm text-slate-600">
-              {pagination.total} {activeTab === "note" ? "verified note" : "approved question paper"}{pagination.total === 1 ? "" : "s"}
+              {pagination.total} {activeTab === "note" ? "public note" : "public question paper"}{pagination.total === 1 ? "" : "s"}
             </p>
             <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
-              {activeTab === "note" ? "Verified notes only" : "Approved papers only"}
+              {activeTab === "note" ? "Public notes" : "Public question papers"}
             </span>
           </div>
           {error && <p className="mb-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700" role="alert">{error}</p>}
           {notice && <p className="mb-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700" role="status">{notice}</p>}
           {loading ? (
-            <PageLoader label={activeTab === "note" ? "Searching verified notes…" : "Searching approved question papers…"} />
+            <PageLoader label={activeTab === "note" ? "Searching notes…" : "Searching question papers…"} />
           ) : resources.length === 0 ? (
-            <EmptyState icon="book" title={activeTab === "note" ? "No verified notes found" : "No approved question papers found"}>
+            <EmptyState icon="book" title={activeTab === "note" ? "No notes found" : "No question papers found"}>
               {Object.values(activeFilters).some(Boolean)
                 ? "No searchable resources match these filters. Try different filters or clear your search."
                 : activeTab === "note"
-                  ? "Only published notes appear here. Newly uploaded notes remain private while OCR and academic verification are pending or need human review."
-                  : "Only approved question papers appear here. Newly uploaded papers remain private until they are approved."}
+                  ? "Notes appear here as soon as students upload them. OCR and AI verification continue separately in the background."
+                  : "Question papers appear here as soon as students upload them."}
             </EmptyState>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {resources.map((resource) => {
                 const hasVoted = helpfulVotes.has(`${resource.type}:${resource.id}`);
-                const resourceUrl = `${api.defaults.baseURL}${resource.downloadUrl}`;
                 return (
                   <article className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-1 hover:border-orange-200 hover:shadow-lg sm:p-5" key={`${resource.type}-${resource.id}`} data-search-animate>
                     <div className="flex items-center justify-between gap-2">
                       <span className="rounded-lg bg-orange-50 px-2.5 py-1 text-xs font-bold uppercase text-brand">
-                        {resource.type === "note" ? "Verified notes" : "Approved question paper"}
+                        {resource.type === "note" ? "Student notes" : "Question paper"}
                       </span>
                       <span className="text-xs text-slate-500">{resource.fileFormat?.toUpperCase()}</span>
                     </div>
@@ -586,14 +613,10 @@ export default function ResourceSearchPage() {
                     <div className="mt-auto flex flex-wrap items-center gap-2 pt-5">
                       {user ? (
                         <>
-                          <a className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-center text-sm font-bold text-slate-700 transition hover:bg-orange-50" href={resourceUrl} rel="noreferrer" target="_blank">
+                          <Link className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-center text-sm font-bold text-slate-700 transition hover:bg-orange-50" to={`/resources/${resource.type}/${resource.id}`}>
                             <FileText aria-hidden="true" size={16} />
-                            Preview
-                          </a>
-                          <a className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand px-3 py-2.5 text-center text-sm font-bold text-white transition hover:bg-orange-700" download href={resourceUrl}>
-                            <Download aria-hidden="true" size={16} />
-                            Download
-                          </a>
+                            View Resource
+                          </Link>
                         </>
                       ) : (
                         <Link className="flex-1 rounded-xl bg-brand px-3 py-2.5 text-center text-sm font-bold text-white hover:bg-orange-700" to="/login">

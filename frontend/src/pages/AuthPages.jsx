@@ -79,11 +79,10 @@ export function LoginPage({ admin = false }) {
       <form className="space-y-4" onSubmit={handleSubmit}>
         <FormAlert message={request.message} success={request.success} />
         <FormField
-          label="Email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          placeholder="you@college.edu"
+          label="Email or username"
+          name="identifier"
+          autoComplete="username"
+          placeholder="you@college.edu or username"
           required
         />
         <FormField

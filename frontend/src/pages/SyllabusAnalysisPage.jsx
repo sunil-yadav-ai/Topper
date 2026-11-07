@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Copy, Download, RefreshCw } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Copy, RefreshCw } from "lucide-react";
 import Panel from "../components/Panel.jsx";
 import { api } from "../lib/api.js";
 
@@ -7,10 +8,6 @@ const emptyStructure = { subjects: [] };
 
 function errorText(error) {
   return error.response?.data?.message ?? error.message ?? "Syllabus analysis failed.";
-}
-
-function downloadUrl(path) {
-  return `${api.defaults.baseURL.replace(/\/$/, "")}${path}`;
 }
 
 function formatOutline(structure) {
@@ -39,14 +36,12 @@ function ResourceCard({ resource }) {
             </p>
           )}
         </div>
-        <a
+        <Link
           className="shrink-0 rounded-lg bg-brand px-3 py-2 text-sm font-bold text-white hover:bg-indigo-700"
-          href={downloadUrl(resource.downloadUrl)}
-          rel="noreferrer"
-          target="_blank"
+          to={`/resources/${resource.type}/${resource.id}`}
         >
-          View {resource.type === "pyq" ? "paper" : "notes"}
-        </a>
+          View Resource
+        </Link>
       </div>
     </article>
   );
@@ -236,17 +231,6 @@ export default function SyllabusAnalysisPage() {
     }
   }
 
-  function downloadOutline() {
-    const blob = new Blob([formatOutline(structure)], { type: "text/plain;charset=utf-8" });
-    const objectUrl = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = objectUrl;
-    link.download = "edurise-syllabus-topics.txt";
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
-    setNotice("Your syllabus outline was downloaded.");
-  }
-
   return (
     <main className="ed-syllabus-page">
       <section className="mx-auto max-w-7xl space-y-5 px-4 py-6 sm:space-y-6 sm:px-8 sm:py-10">
@@ -255,7 +239,7 @@ export default function SyllabusAnalysisPage() {
           <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Syllabus analysis</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base">
             Upload a syllabus to extract its subjects, units, topics, and subtopics.
-            Review the outline before searching approved notes and PYQs.
+            Review the outline before searching public notes and PYQs.
           </p>
         </div>
 
@@ -376,9 +360,6 @@ export default function SyllabusAnalysisPage() {
                         )}
                         <button className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700" onClick={copyOutline} type="button">
                           <Copy aria-hidden="true" className="mr-2 inline size-4" />Copy topics
-                        </button>
-                        <button className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700" onClick={downloadOutline} type="button">
-                          <Download aria-hidden="true" className="mr-2 inline size-4" />Download
                         </button>
                       </div>
                     )}
@@ -610,7 +591,7 @@ function ResourceResults({ resources }) {
       <Panel>
         <h2 className="text-xl font-bold text-ink">Missing topics</h2>
         <p className="mt-1 text-sm text-slate-600">
-          These topics did not match any available approved notes. PYQs are matched at subject level.
+          These topics did not match any available public notes. PYQs are matched at subject level.
         </p>
         {resources.missingTopics.length ? (
           <ul className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -626,7 +607,7 @@ function ResourceResults({ resources }) {
             {!allTopics.length
               ? "No syllabus topics were available to match."
               : allTopics.every((topic) => topic.notes.length > 0)
-                ? "Every topic matched at least one approved note."
+                ? "Every topic matched at least one public note."
                 : "No topics were confirmed as missing."}
           </p>
         )}
@@ -661,7 +642,7 @@ function ResourceResults({ resources }) {
                     ) : (
                       <p className="mt-2 text-sm text-amber-800">
                         {topic.coverageComplete
-                          ? "No matching approved notes were found for this topic."
+                          ? "No matching public notes were found for this topic."
                           : "No match in the most recent subject notes; older resources may match."}
                       </p>
                     )}
@@ -677,7 +658,7 @@ function ResourceResults({ resources }) {
                 {subject.notes.map((note) => <ResourceCard key={note.id} resource={note} />)}
               </div>
               {subject.notesTruncated && (
-                <p className="mt-2 text-sm text-slate-500">Showing the 100 most recent notes. More approved notes are available.</p>
+                <p className="mt-2 text-sm text-slate-500">Showing the 100 most recent notes. More public notes are available.</p>
               )}
             </section>
           )}
@@ -689,10 +670,10 @@ function ResourceResults({ resources }) {
                 {subject.pyqs.map((pyq) => <ResourceCard key={pyq.id} resource={pyq} />)}
               </div>
             ) : (
-              <p className="mt-3 text-sm text-slate-600">No approved PYQs are currently available for this subject.</p>
+              <p className="mt-3 text-sm text-slate-600">No public PYQs are currently available for this subject.</p>
             )}
             {subject.pyqsTruncated && (
-              <p className="mt-2 text-sm text-slate-500">Showing the 100 most recent approved PYQs.</p>
+              <p className="mt-2 text-sm text-slate-500">Showing the 100 most recent public PYQs.</p>
             )}
           </section>
         </Panel>

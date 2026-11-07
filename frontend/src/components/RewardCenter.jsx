@@ -67,7 +67,7 @@ export default function RewardCenter() {
                 ))}
               </ul>
               <p className="mt-3 text-xs leading-5 text-slate-500">
-                Notes earn points only after AI approval, PYQs only after administrator approval, and correction reports only after an administrator confirms an academic issue. High-quality bonuses require administrator review.
+                Notes earn points only after AI verification. PYQs earn points when uploaded and published. Correction reports earn points only after an administrator confirms an academic issue; high-quality bonuses require administrator review.
               </p>
             </Panel>
             <Panel>
@@ -110,7 +110,7 @@ export default function RewardCenter() {
                 ))}
               </ul>
             ) : (
-              <p className="mt-3 text-sm text-slate-500">Approved contributions will appear here.</p>
+              <p className="mt-3 text-sm text-slate-500">Recognized contributions will appear here.</p>
             )}
           </Panel>
 

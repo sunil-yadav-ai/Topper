@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { api } from "../../lib/api.js";
 
@@ -130,14 +131,12 @@ export default function CommunityReports({ admin = false }) {
                   </p>
                 </div>
                 {admin && report.note?.id && (
-                  <a
+                  <Link
                     className="mt-2 inline-block text-sm font-semibold text-brand hover:underline"
-                    href={`${api.defaults.baseURL}/search/notes/${report.note.id}/download`}
-                    rel="noreferrer"
-                    target="_blank"
+                    to={`/resources/note/${report.note.id}`}
                   >
-                    Open published note
-                  </a>
+                    View note
+                  </Link>
                 )}
                 <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                   report.status === "confirmed"

@@ -156,7 +156,7 @@ export default function AdminRewardsPanel() {
 
             <Panel>
               <h3 className="text-lg font-bold text-ink">Recognize a high-quality resource</h3>
-              <p className="mt-1 text-sm text-slate-600">Award the configured quality bonus to the owner of an approved resource. Each resource can receive this bonus once.</p>
+              <p className="mt-1 text-sm text-slate-600">Award the configured quality bonus to the owner of a published resource. Each resource can receive this bonus once.</p>
               <form className="mt-4 space-y-3" onSubmit={submitQualityBonus}>
                 <label className="block text-sm font-semibold text-slate-700">
                   Resource type
@@ -166,8 +166,8 @@ export default function AdminRewardsPanel() {
                     onChange={updateBonus}
                     value={bonus.resourceType}
                   >
-                    <option value="note">Approved handwritten note</option>
-                    <option value="pyq">Approved PYQ</option>
+                    <option value="note">Published handwritten note</option>
+                    <option value="pyq">Published PYQ</option>
                   </select>
                 </label>
                 <label className="block text-sm font-semibold text-slate-700">

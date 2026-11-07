@@ -388,21 +388,19 @@ export default function ProfilePage() {
                   <div className="ed-resource-top">
                     <span className={`ed-resource-type ${item.type === "note" ? "ed-resource-type-notes" : "ed-resource-type-pyq"}`}>
                       <span aria-hidden="true">{item.type === "note" ? "▤" : "◷"}</span>
-                      {item.type === "note" ? "Verified notes" : "Approved PYQ"}
+                      {item.type === "note" ? "Student notes" : "Question paper"}
                     </span>
                     <span className="ed-resource-semester">SEM {item.semester}</span>
                   </div>
                   <h3>{item.title}</h3>
                   <p className="ed-resource-subject">{item.subject}</p>
                   <p className="ed-resource-date">SHARED {formatDate(item.createdAt, { day: "numeric", month: "short", year: "numeric" }).toUpperCase()}</p>
-                  <a
+                  <Link
                     className="ed-profile-button ed-profile-button-resource"
-                    href={`${api.defaults.baseURL}${item.downloadUrl}`}
-                    rel="noreferrer"
-                    target="_blank"
+                    to={`/resources/${item.type}/${item.id}`}
                   >
-                    Open resource <span aria-hidden="true">↗</span>
-                  </a>
+                    View Resource <span aria-hidden="true">↗</span>
+                  </Link>
                 </article>
               ))}
             </div>
@@ -411,7 +409,7 @@ export default function ProfilePage() {
               <span aria-hidden="true" className="ed-profile-empty-art">✳</span>
               <p className="ed-profile-label">THE NEXT GOOD THING STARTS HERE</p>
               <h3>No contributions just yet</h3>
-              <p>Approved notes and papers shared by this student will find a home here.</p>
+              <p>Notes and papers shared by this student will find a home here.</p>
             </div>
           )}
         </section>

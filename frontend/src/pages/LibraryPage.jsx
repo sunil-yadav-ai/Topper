@@ -5,7 +5,6 @@ import { api } from "../lib/api.js";
 const sections = [
   ["saved", "Saved resources"],
   ["recent", "Recently accessed"],
-  ["downloads", "Download history"],
   ["uploads", "My uploads"],
 ];
 
@@ -35,20 +34,12 @@ export default function LibraryPage() {
         const notes = notesResponse.data.notes.map((note) => ({
           ...note,
           type: "note",
-          uploadStatus: note.publicationStatus === "published"
-            ? "Published"
-            : note.approvalDecision === "REJECTED"
-              ? "Needs correction"
-              : "Under review",
+          uploadStatus: note.publicationStatus === "published" ? "Public" : "Private",
         }));
         const pyqs = pyqsResponse.data.pyqs.map((pyq) => ({
           ...pyq,
           type: "pyq",
-          uploadStatus: pyq.approvalStatus === "approved"
-            ? "Published"
-            : pyq.approvalStatus === "rejected"
-              ? "Not approved"
-              : "Under review",
+          uploadStatus: pyq.publicationStatus === "published" ? "Public" : "Private",
         }));
         setItems([...notes, ...pyqs].sort(
           (left, right) => new Date(right.createdAt) - new Date(left.createdAt),
@@ -125,7 +116,7 @@ export default function LibraryPage() {
           <div className="relative">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-200">Your free study collection</p>
             <h1 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl">Student library</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-indigo-100/85 sm:text-base">Your saved notes and PYQs, recently opened resources, and download history. All resources remain free.</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-indigo-100/85 sm:text-base">Your saved notes and PYQs, recently opened resources, and your uploads. All resources are free to view.</p>
           </div>
         </div>
 
@@ -182,10 +173,10 @@ export default function LibraryPage() {
                 <h3 className="font-bold text-ink">Nothing here yet</h3>
                 <p className="mt-2 text-sm text-slate-500">
                   {section === "saved"
-                    ? "Save approved notes and PYQs from resource search."
+                    ? "Save notes and PYQs from Explore."
                     : section === "uploads"
-                      ? "Resources you upload will be listed here with their review status."
-                      : "Open an approved note or PYQ to see it in this list."}
+                      ? "Resources you upload are public immediately and listed here."
+                      : "Open a note or PYQ to see it in this list."}
                 </p>
                 <Link className="mt-4 inline-block rounded-xl bg-brand px-4 py-2 text-sm font-bold text-white" to={section === "uploads" ? "/upload" : "/search"}>
                   {section === "uploads" ? "Upload a resource" : "Find free resources"}
@@ -206,14 +197,12 @@ export default function LibraryPage() {
                     <p className="mt-2 text-xs text-slate-400">
                       {section === "uploads"
                         ? `Uploaded ${new Date(item.createdAt).toLocaleDateString()}`
-                        : section === "downloads" && item.lastDownloadedAt
-                        ? `Downloaded ${new Date(item.lastDownloadedAt).toLocaleString()} · ${item.downloadCount} time${item.downloadCount === 1 ? "" : "s"}`
                         : section === "recent" && item.lastAccessedAt
                           ? `Opened ${new Date(item.lastAccessedAt).toLocaleString()}`
                           : `Saved ${new Date(item.savedAt).toLocaleDateString()}`}
                     </p>
                     <div className="mt-auto flex flex-wrap gap-2 pt-5">
-                      <a className="flex-1 rounded-xl bg-brand px-3 py-2.5 text-center text-sm font-bold text-white hover:bg-indigo-700" href={`${api.defaults.baseURL}${item.downloadUrl}`} rel="noreferrer" target="_blank">Open · Free</a>
+                      <Link className="flex-1 rounded-xl bg-brand px-3 py-2.5 text-center text-sm font-bold text-white hover:bg-indigo-700" to={`/resources/${item.type}/${item.id}`}>View Resource</Link>
                       {section === "saved" && (
                         <>
                           <select

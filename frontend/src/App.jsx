@@ -27,6 +27,7 @@ import {
 } from "./pages/AuthPages.jsx";
 
 const EduRiseLanding = lazy(() => import("./components/EduRiseLanding.jsx"));
+const ResourceViewerPage = lazy(() => import("./pages/ResourceViewerPage.jsx"));
 
 export default function App() {
   useEffect(() => {
@@ -54,6 +55,16 @@ export default function App() {
       <Route element={<ApplicationLayout />}>
         <Route path="/pyqs" element={<PyqsPage />} />
         <Route path="/search" element={<ResourceSearchPage />} />
+        <Route
+          path="/resources/:resourceType/:resourceId"
+          element={(
+            <AuthenticatedPage>
+              <Suspense fallback={<PageLoader label="Loading resource viewer…" />}>
+                <ResourceViewerPage />
+              </Suspense>
+            </AuthenticatedPage>
+          )}
+        />
         <Route path="/advertising" element={<AdvertisingDisclosurePage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/library" element={<ProtectedPage><LibraryPage /></ProtectedPage>} />

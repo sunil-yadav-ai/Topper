@@ -8,7 +8,7 @@ export default function SavedResources({ resources }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-ink">Saved resources</h2>
-          <p className="mt-1 text-sm text-slate-500">Approved resources you’ve saved</p>
+          <p className="mt-1 text-sm text-slate-500">Resources you’ve saved</p>
         </div>
         <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-brand">
           {resources.length}
@@ -32,7 +32,7 @@ export default function SavedResources({ resources }) {
         </ul>
       ) : (
         <p className="mt-5 rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-          You haven’t saved any approved resources yet.
+          You haven’t saved any resources yet.
         </p>
       )}
     </section>

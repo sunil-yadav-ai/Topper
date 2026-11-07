@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import CommunityReports from "../components/dashboard/CommunityReports.jsx";
 import AdminRewardsPanel from "../components/AdminRewardsPanel.jsx";
 import Panel from "../components/Panel.jsx";
@@ -6,7 +7,7 @@ import { api } from "../lib/api.js";
 
 const sections = [
   ["overview", "Overview"],
-  ["content", "Content moderation"],
+  ["content", "AI reports"],
   ["students", "Students"],
   ["reports", "Resource reports"],
   ["rewards", "Rewards"],
@@ -59,7 +60,7 @@ export default function AdminDashboardPage() {
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-200">Platform administration</p>
               <h1 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl">Admin dashboard</h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-indigo-100/85 sm:text-base">Manage students, moderation, reports, and the contributor reward budget.</p>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-indigo-100/85 sm:text-base">Manage students, AI verification reports, community reports, and the contributor reward budget.</p>
             </div>
             <button
               className="rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/20"
@@ -225,40 +226,14 @@ function MonthlyAnalytics({ analytics }) {
 }
 
 function ContentModerationSection() {
-  const [activeQueue, setActiveQueue] = useState("notes");
-  return (
-    <div className="space-y-5">
-      <Panel>
-        <div className="flex flex-wrap gap-2">
-          <button
-            className={`rounded-lg px-4 py-2 text-sm font-semibold ${activeQueue === "notes" ? "bg-brand text-white" : "bg-slate-100 text-slate-700"}`}
-            onClick={() => setActiveQueue("notes")}
-            type="button"
-          >
-            AI-verified notes
-          </button>
-          <button
-            className={`rounded-lg px-4 py-2 text-sm font-semibold ${activeQueue === "pyqs" ? "bg-brand text-white" : "bg-slate-100 text-slate-700"}`}
-            onClick={() => setActiveQueue("pyqs")}
-            type="button"
-          >
-            PYQ approvals
-          </button>
-        </div>
-      </Panel>
-      {activeQueue === "notes" ? <AdminNotesQueue /> : <AdminPyqQueue />}
-    </div>
-  );
+  return <AdminNotesQueue />;
 }
 
 function AdminNotesQueue() {
   const [decision, setDecision] = useState("needs_review");
   const [page, setPage] = useState(1);
   const [result, setResult] = useState(null);
-  const [reasons, setReasons] = useState({});
-  const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
 
   async function loadNotes() {
     setError("");
@@ -274,30 +249,6 @@ function AdminNotesQueue() {
     loadNotes();
   }, [decision, page]);
 
-  async function reviewNote(note, nextDecision) {
-    const reason = reasons[note.id]?.trim();
-    if (!reason) {
-      setError("Enter a moderation reason before deciding on this note.");
-      return;
-    }
-    setBusyId(note.id);
-    setError("");
-    setNotice("");
-    try {
-      const { data } = await api.patch(`/admin/notes/${note.id}/review`, {
-        decision: nextDecision,
-        reason,
-      });
-      setNotice(data.message);
-      setReasons((current) => ({ ...current, [note.id]: "" }));
-      await loadNotes();
-    } catch (requestError) {
-      setError(messageFrom(requestError));
-    } finally {
-      setBusyId("");
-    }
-  }
-
   return (
     <section className="space-y-4">
       <Panel>
@@ -305,11 +256,11 @@ function AdminNotesQueue() {
           <div>
             <h2 className="text-xl font-bold text-ink">AI verification reports</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Review extracted evidence and verification findings. Manual decisions require a reason and are retained in the note history.
+              Read-only AI verification reports. Uploads are public regardless of verification status.
             </p>
           </div>
           <label className="text-sm font-semibold text-slate-700">
-            AI decision
+            AI result
             <select
               className="ml-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
               onChange={(event) => {
@@ -327,31 +278,23 @@ function AdminNotesQueue() {
         </div>
       </Panel>
       {error && <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-800" role="alert">{error}</p>}
-      {notice && <p className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800" role="status">{notice}</p>}
       {!result ? (
         <Panel><p className="text-sm text-slate-600">Loading note reports…</p></Panel>
       ) : result.notes.length ? (
         <div className="space-y-4">
           {result.notes.map((note) => (
-            <NoteReviewCard
-              busy={busyId === note.id}
-              key={note.id}
-              note={note}
-              onReasonChange={(value) => setReasons((current) => ({ ...current, [note.id]: value }))}
-              onReview={reviewNote}
-              reason={reasons[note.id] ?? ""}
-            />
+            <NoteReviewCard key={note.id} note={note} />
           ))}
           <Pagination pagination={result.pagination} onPage={setPage} />
         </div>
       ) : (
-        <Panel><p className="text-sm text-slate-600">No notes match this moderation filter.</p></Panel>
+        <Panel><p className="text-sm text-slate-600">No notes match this verification filter.</p></Panel>
       )}
     </section>
   );
 }
 
-function NoteReviewCard({ note, reason, onReasonChange, onReview, busy }) {
+function NoteReviewCard({ note }) {
   const issues = note.verificationReport?.report?.issues ?? [];
   return (
     <Panel>
@@ -363,19 +306,17 @@ function NoteReviewCard({ note, reason, onReasonChange, onReview, busy }) {
             Uploaded by {note.uploader} ({note.uploaderEmail}) · {new Date(note.uploadedAt).toLocaleString()}
           </p>
         </div>
-        <a
+        <Link
           className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-brand hover:bg-indigo-50"
-          href={note.reviewUrl}
-          rel="noreferrer"
-          target="_blank"
+          to={`/resources/note/${note.id}`}
         >
-          Open original notes
-        </a>
+          View resource
+        </Link>
       </div>
       <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
         <StatusBadge>{note.decision}</StatusBadge>
         <StatusBadge>{note.verificationStatus} verification</StatusBadge>
-        <StatusBadge>{note.decisionSource === "admin" ? "Admin decision" : "AI decision"}</StatusBadge>
+        <StatusBadge>{note.decisionSource === "admin" ? "Historical admin override" : "AI result"}</StatusBadge>
         <StatusBadge>{note.publicationStatus}</StatusBadge>
         <StatusBadge>{note.confirmedErrorCount} confirmed / {note.verifiableStatementCount} verifiable</StatusBadge>
         {note.mistakePercentage != null && <StatusBadge>{note.mistakePercentage}% mistake rate</StatusBadge>}
@@ -383,7 +324,7 @@ function NoteReviewCard({ note, reason, onReasonChange, onReview, busy }) {
       {note.humanReviewReason && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{note.humanReviewReason}</p>}
       {!note.verificationReport && note.verificationStatus === "completed" && (
         <p className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-800">
-          The encrypted verification report is unavailable. Investigate before manually approving this note.
+          The encrypted verification report is unavailable. The verification result remains unchanged.
         </p>
       )}
       {note.verificationReport && (
@@ -436,121 +377,12 @@ function NoteReviewCard({ note, reason, onReasonChange, onReview, busy }) {
           </div>
         </details>
       )}
-      {note.moderationHistory?.length > 0 && (
-        <details className="mt-3">
-          <summary className="cursor-pointer text-sm font-semibold text-slate-700">Admin decision history ({note.moderationHistory.length})</summary>
-          <ul className="mt-2 space-y-2">
-            {note.moderationHistory.map((entry, index) => (
-              <li className="text-xs text-slate-600" key={`${note.id}-review-${index}`}>
-                {entry.actor} · {entry.decision} · {entry.reason} · {new Date(entry.createdAt).toLocaleString()}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-      {note.verificationStatus === "completed" && (
-        <div className="mt-4 border-t border-slate-100 pt-4">
-          <label className="block text-sm font-semibold text-slate-700">
-            Required moderation reason
-            <textarea
-              className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal"
-              maxLength={2000}
-              onChange={(event) => onReasonChange(event.target.value)}
-              placeholder="Explain what you reviewed and why you are making this decision."
-              rows={2}
-              value={reason}
-            />
-          </label>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
-              disabled={busy || note.decision === "APPROVED"}
-              onClick={() => onReview(note, "APPROVED")}
-              type="button"
-            >
-              {busy ? "Saving…" : "Manually approve and publish"}
-            </button>
-            <button
-              className="rounded-xl border border-rose-200 px-4 py-2 text-sm font-bold text-rose-700 disabled:opacity-50"
-              disabled={busy || note.decision === "REJECTED"}
-              onClick={() => onReview(note, "REJECTED")}
-              type="button"
-            >
-              {busy ? "Saving…" : "Manually reject"}
-            </button>
-          </div>
-        </div>
-      )}
     </Panel>
   );
 }
 
 function StatusBadge({ children }) {
   return <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{children}</span>;
-}
-
-function AdminPyqQueue() {
-  const [pyqs, setPyqs] = useState([]);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState("");
-
-  async function loadPending() {
-    setError("");
-    try {
-      const { data } = await api.get("/pyqs/review");
-      setPyqs(data.pyqs);
-    } catch (requestError) {
-      setError(messageFrom(requestError));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { loadPending(); }, []);
-
-  async function review(pyq, approvalStatus) {
-    setBusyId(pyq.id);
-    setError("");
-    setNotice("");
-    try {
-      const { data } = await api.patch(`/pyqs/${pyq.id}/approval`, { approvalStatus });
-      setPyqs((current) => current.filter((item) => item.id !== pyq.id));
-      setNotice(data.message);
-    } catch (requestError) {
-      setError(messageFrom(requestError));
-    } finally {
-      setBusyId("");
-    }
-  }
-
-  return (
-    <Panel>
-      <h2 className="text-xl font-bold text-ink">PYQ approval queue</h2>
-      <p className="mt-1 text-sm text-slate-600">Approved papers become publicly searchable and remain free.</p>
-      {error && <p className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700" role="alert">{error}</p>}
-      {notice && <p className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800" role="status">{notice}</p>}
-      {loading ? <p className="mt-4 text-sm text-slate-600">Loading pending PYQs…</p> : pyqs.length ? (
-        <div className="mt-4 divide-y divide-slate-100">
-          {pyqs.map((pyq) => (
-            <article className="flex flex-col justify-between gap-4 py-4 sm:flex-row sm:items-center" key={pyq.id}>
-              <div>
-                <h3 className="font-bold text-ink">{pyq.subject} · {pyq.examinationYear} {pyq.examType}</h3>
-                <p className="mt-1 text-sm text-slate-600">{pyq.university} · {pyq.college} · Semester {pyq.semester}</p>
-                <p className="mt-1 text-xs text-slate-500">Uploaded by {pyq.uploadedBy} {pyq.uploaderEmail}</p>
-                <a className="mt-2 inline-block text-sm font-semibold text-brand underline" href={pyq.reviewUrl} rel="noreferrer" target="_blank">Review PDF</a>
-              </div>
-              <div className="flex gap-2">
-                <button className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50" disabled={Boolean(busyId)} onClick={() => review(pyq, "approved")} type="button">{busyId === pyq.id ? "Saving…" : "Approve"}</button>
-                <button className="rounded-xl border border-rose-200 px-4 py-2 text-sm font-bold text-rose-700 disabled:opacity-50" disabled={Boolean(busyId)} onClick={() => review(pyq, "rejected")} type="button">{busyId === pyq.id ? "Saving…" : "Reject"}</button>
-              </div>
-            </article>
-          ))}
-        </div>
-      ) : <p className="mt-4 text-sm text-slate-600">No question papers are awaiting review.</p>}
-    </Panel>
-  );
 }
 
 function StudentManagementSection() {
@@ -756,7 +588,7 @@ function AdminPyqReports() {
               </div>
               <p className="mt-3 text-sm font-semibold capitalize text-slate-700">{report.reason}</p>
               {report.details && <p className="mt-1 whitespace-pre-wrap text-sm text-slate-600">{report.details}</p>}
-              {report.pyq?.reviewUrl && <a className="mt-2 inline-block text-sm font-semibold text-brand underline" href={report.pyq.reviewUrl} rel="noreferrer" target="_blank">Review paper PDF</a>}
+              {report.pyq?.id && <Link className="mt-2 inline-block text-sm font-semibold text-brand underline" to={`/resources/pyq/${report.pyq.id}`}>View question paper</Link>}
               {report.status === "open" && (
                 <>
                   <textarea

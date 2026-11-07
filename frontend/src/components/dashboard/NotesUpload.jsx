@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import FormField from "../FormField.jsx";
 import { api } from "../../lib/api.js";
 import { notifyResourceOptionsUpdated } from "../../lib/resource-options.js";
@@ -34,16 +35,16 @@ function formatFileSize(bytes) {
 }
 
 function verificationLabel(status, publicationStatus) {
-  if (status === "APPROVED") return "Approved and published";
-  if (status === "APPROVED_WITH_WARNING") return "Approved with warning and published";
-  if (status === "REJECTED") return "Rejected · upload a corrected version";
-  if (status === "NEEDS_HUMAN_REVIEW") return "Needs human review · private";
-  if (status === "PENDING") return "Pending academic verification · private";
-  if (publicationStatus === "published") return "Verified and published";
-  if (status === "completed") return "Academic review complete · remains private";
+  if (status === "APPROVED") return "AI verification passed · public";
+  if (status === "APPROVED_WITH_WARNING") return "AI verification passed with notes · public";
+  if (status === "REJECTED") return "AI verification flagged possible errors · public";
+  if (status === "NEEDS_HUMAN_REVIEW") return "AI recommends human review · public";
+  if (status === "PENDING") return "Public · AI verification pending";
+  if (publicationStatus === "published") return "Public resource";
+  if (status === "completed") return "AI verification complete";
   if (status === "processing") return "AI verification in progress";
-  if (status === "verified") return "Verified · private";
-  if (status === "rejected") return "Not approved";
+  if (status === "verified") return "AI verification completed";
+  if (status === "rejected") return "AI verification flagged concerns";
   if (status === "failed") return "Verification needs attention";
   return "Queued for AI verification";
 }
@@ -311,7 +312,7 @@ export default function NotesUpload({ profile }) {
           <span className="inline-flex rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-brand">Contribute</span>
           <h2 className="text-lg font-bold text-ink">Upload handwritten notes</h2>
           <p className="mt-1 text-sm text-slate-500">
-            PDF, JPG, JPEG, or PNG · up to 10 MB. Notes stay private while AI verification is pending.
+            PDF, JPG, JPEG, or PNG · up to 10 MB. Notes are public immediately; OCR and AI verification continue separately.
           </p>
         </div>
 
@@ -394,7 +395,7 @@ export default function NotesUpload({ profile }) {
           <div>
             <span className="inline-flex rounded-full bg-sky-50 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-sky-700">My library</span>
             <h2 className="text-lg font-bold text-ink">Your uploaded notes</h2>
-            <p className="mt-1 text-sm text-slate-500">Only you can access or delete your uploads.</p>
+            <p className="mt-1 text-sm text-slate-500">Your uploads are public to students; you can still review or delete your own files.</p>
           </div>
           <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-sm font-bold text-slate-600">{notes.length}</span>
         </div>
@@ -463,12 +464,13 @@ export default function NotesUpload({ profile }) {
                             : "View academic review"}
                       </button>
                     )}
-                    {note.approvalDecision === "REJECTED" && (
+                    {note.verificationStatus === "completed" &&
+                      ["REJECTED", "NEEDS_HUMAN_REVIEW"].includes(note.approvalDecision) && (
                       <div className="mt-3">
                         <label className="inline-flex cursor-pointer items-center rounded-lg bg-indigo-50 px-3 py-2 text-sm font-semibold text-brand hover:bg-indigo-100">
                           {resubmittingId === note.id
                             ? `Uploading corrected version… ${progress}%`
-                            : "Upload corrected version"}
+                            : "Upload an optional corrected version"}
                           <input
                             accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
                             className="sr-only"
@@ -478,7 +480,7 @@ export default function NotesUpload({ profile }) {
                           />
                         </label>
                         <p className="mt-1 text-xs text-slate-500">
-                          Your corrected upload starts a new OCR and verification run. The rejected version stays in your history.
+                          The new version will also be public immediately. This does not change the original AI report.
                         </p>
                       </div>
                     )}
@@ -496,12 +498,12 @@ export default function NotesUpload({ profile }) {
                             : "View recognized text"}
                       </button>
                     )}
-                    <a
+                    <Link
                       className="mt-2 inline-block text-sm font-semibold text-brand hover:underline"
-                      href={new URL(note.downloadUrl, api.defaults.baseURL).toString()}
+                      to={`/resources/note/${note.id}`}
                     >
-                      View your file
-                    </a>
+                      View Resource
+                    </Link>
                   </div>
                   <button
                     className="shrink-0 rounded-lg px-2 py-1 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
@@ -519,7 +521,7 @@ export default function NotesUpload({ profile }) {
                     </p>
                     {verificationByNoteId[note.id].decisionSource === "admin" && (
                       <p className="mt-2 rounded-lg bg-indigo-50 p-3 text-sm text-indigo-900">
-                        Final administrator decision: {verificationByNoteId[note.id].finalDecision.replaceAll("_", " ")}.
+                        Historical administrator decision: {verificationByNoteId[note.id].finalDecision.replaceAll("_", " ")}.
                         {verificationByNoteId[note.id].moderationReason && ` ${verificationByNoteId[note.id].moderationReason}`}
                       </p>
                     )}
