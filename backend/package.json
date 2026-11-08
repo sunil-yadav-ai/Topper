@@ -12,6 +12,7 @@
     "retry-failed-note-ocr": "node src/scripts/retry-failed-note-ocr.js"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^1.1.0",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",
@@ -24,6 +25,7 @@
     "mongoose": "^8.18.1",
     "multer": "^2.5.0",
     "nodemailer": "^10.3.1",
-    "pdf-lib": "^1.17.1"
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.5.438"
   }
 }

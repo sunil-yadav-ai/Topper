@@ -17,6 +17,10 @@ import {
 } from "./note-approval.service.js";
 import { sendNoteDecisionEmail } from "./note-decision-notification.service.js";
 import { awardContribution } from "./reward.service.js";
+import {
+  buildNoteSearchFields,
+  createSearchNgrams,
+} from "./resource-search-index.service.js";
 
 const maxAttempts = 3;
 const leaseDurationMs = 5 * 60 * 1000;
@@ -101,8 +105,8 @@ async function finalizeVerification({ note, job, report, model }) {
       createNotification({
         recipient: note.uploadedBy,
         type: "note_approved",
-        title: "Notes approved",
-        message: `"${note.title}" passed AI verification and has been published.`,
+        title: "AI verification complete",
+        message: `"${note.title}" passed AI verification and is publicly available.`,
         link: "/library",
         dedupeKey: notificationKey,
       }),
@@ -112,7 +116,7 @@ async function finalizeVerification({ note, job, report, model }) {
       createNotification({
         recipient: note.uploadedBy,
         type: "note_approved",
-        title: "Notes approved with a warning",
+        title: "AI verification passed with warnings",
         message: `"${note.title}" is published. Review the academic verification report for suggested corrections.`,
         link: "/library",
         dedupeKey: notificationKey,
@@ -131,8 +135,8 @@ async function finalizeVerification({ note, job, report, model }) {
       createNotification({
         recipient: note.uploadedBy,
         type: "note_rejected",
-        title: "Notes not approved",
-        message: `"${note.title}" was not approved. Review the detailed report and upload a corrected version.`,
+        title: "AI verification flagged possible errors",
+        message: `"${note.title}" remains public. Review the detailed report and optionally upload a corrected version.`,
         link: "/library",
         dedupeKey: notificationKey,
       }),
@@ -140,7 +144,7 @@ async function finalizeVerification({ note, job, report, model }) {
         recipient: note.uploadedBy,
         type: "corrections_required",
         title: "Corrections required",
-        message: `Review the suggested corrections for "${note.title}" before uploading a corrected version. Your original notes remain unchanged.`,
+        message: `Review the suggested corrections for "${note.title}". You can upload a corrected version at any time; the original remains unchanged and public.`,
         link: "/library",
         dedupeKey: `note-corrections:ai:${note._id}`,
       }),
@@ -228,6 +232,8 @@ async function processNextOcrJob() {
             ocrStatus: "completed",
             ocrPageCount: result.pages.length,
             ocrError: "",
+            searchNgrams: createSearchNgrams(buildNoteSearchFields(note, result)),
+            searchIndexVersion: 1,
           },
         },
       ),

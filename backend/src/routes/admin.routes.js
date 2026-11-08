@@ -4,7 +4,6 @@ import {
   listAdminNotes,
   listAdminPyqReports,
   listAdminStudents,
-  reviewAdminNote,
   reviewAdminPyqReport,
   setStudentSuspension,
 } from "../controllers/admin.controller.js";
@@ -17,7 +16,6 @@ adminRouter.use(requireAuth, requireRole("admin"));
 adminRouter.post("/announcements", sendAdminAnnouncement);
 adminRouter.get("/overview", getAdminOverview);
 adminRouter.get("/notes", listAdminNotes);
-adminRouter.patch("/notes/:noteId/review", reviewAdminNote);
 adminRouter.get("/students", listAdminStudents);
 adminRouter.patch("/students/:studentId/suspension", setStudentSuspension);
 adminRouter.get("/pyq-reports", listAdminPyqReports);

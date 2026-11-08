@@ -18,6 +18,7 @@ const syllabusAnalysisSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    sourceHash: { type: String, select: false },
     fileName: { type: String, required: true, maxlength: 255 },
     pageCount: { type: Number, min: 1, default: 1 },
     status: {
@@ -37,6 +38,10 @@ const syllabusAnalysisSchema = new mongoose.Schema(
 );
 
 syllabusAnalysisSchema.index({ uploadedBy: 1, createdAt: -1 });
+syllabusAnalysisSchema.index(
+  { uploadedBy: 1, sourceHash: 1 },
+  { unique: true, partialFilterExpression: { sourceHash: { $type: "string" } } },
+);
 
 const SyllabusAnalysis = mongoose.model("SyllabusAnalysis", syllabusAnalysisSchema);
 

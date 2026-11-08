@@ -2,7 +2,6 @@ import { Router } from "express";
 import {
   createNote,
   deleteMyNote,
-  downloadMyNote,
   getMyNotes,
   getMyNoteOcr,
   getMyNoteVerification,
@@ -59,7 +58,6 @@ noteRouter.post("/", receiveNoteFile, createNote);
 noteRouter.post("/:noteId/resubmissions", receiveNoteFile, resubmitCorrectedNote);
 noteRouter.get("/:noteId/ocr", getMyNoteOcr);
 noteRouter.get("/:noteId/verification", getMyNoteVerification);
-noteRouter.get("/:noteId/file", downloadMyNote);
 noteRouter.delete("/:noteId", deleteMyNote);
 
 export default noteRouter;

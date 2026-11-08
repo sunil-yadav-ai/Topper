@@ -58,9 +58,9 @@ export function decideNoteApproval(
 }
 
 export function getNotePublicationFields(decision) {
-  const isApproved = ["APPROVED", "APPROVED_WITH_WARNING"].includes(decision);
+  if (!decision) throw new Error("An AI verification decision is required.");
   return {
-    publicationStatus: isApproved ? "published" : "private",
-    visibility: isApproved ? "public" : "private",
+    publicationStatus: "published",
+    visibility: "public",
   };
 }

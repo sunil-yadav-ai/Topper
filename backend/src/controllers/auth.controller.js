@@ -27,8 +27,16 @@ function unauthorized(message = "Email or password is incorrect.") {
   return error;
 }
 
+function normalizeLoginIdentifier(identifier) {
+  return typeof identifier === "string" ? identifier.trim() : "";
+}
+
 function normalizeEmail(email) {
   return typeof email === "string" ? email.trim().toLowerCase() : "";
+}
+
+function escapedExact(value) {
+  return new RegExp(`^${value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
 }
 
 function isNonEmptyString(value) {
@@ -102,14 +110,22 @@ export async function registerStudent(request, response) {
 }
 
 async function authenticate(request, response, requiredRole) {
-  const email = normalizeEmail(request.body?.email);
+  const identifier = normalizeLoginIdentifier(
+    request.body?.identifier ?? request.body?.email,
+  );
   const password = request.body?.password;
 
-  if (!email || typeof password !== "string") {
-    throw badRequest("Email and password are required.");
+  if (!identifier || typeof password !== "string") {
+    throw badRequest("Email or username and password are required.");
+  }
+  if (identifier.length > 254) {
+    throw badRequest("Email or username is too long.");
   }
 
-  const user = await User.findOne({ email }).select("+password +authVersion");
+  const loginField = identifier.includes("@") ? "email" : "username";
+  const user = await User.findOne({
+    [loginField]: escapedExact(identifier),
+  }).select("+password +authVersion");
   if (!user || !(await user.comparePassword(password))) {
     throw unauthorized();
   }
@@ -270,7 +286,7 @@ export async function forgotPassword(request, response) {
     throw badRequest("Email is required.");
   }
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email: escapedExact(email) });
   if (user) {
     const token = createActionToken();
     user.passwordResetTokenHash = hashActionToken(token);

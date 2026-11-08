@@ -1,4 +1,8 @@
 import mongoose from "mongoose";
+import {
+  buildPyqSearchFields,
+  createSearchNgrams,
+} from "../services/resource-search-index.service.js";
 
 const pyqSchema = new mongoose.Schema(
   {
@@ -10,6 +14,8 @@ const pyqSchema = new mongoose.Schema(
     subject: { type: String, required: true, trim: true, maxlength: 160, index: true },
     title: { type: String, trim: true, maxlength: 200 },
     description: { type: String, trim: true, maxlength: 2000 },
+    keywords: [{ type: String, trim: true, maxlength: 80 }],
+    tags: [{ type: String, trim: true, maxlength: 80 }],
     examinationYear: {
       type: Number,
       required: true,
@@ -33,14 +39,18 @@ const pyqSchema = new mongoose.Schema(
       ],
       index: true,
     },
-    approvalStatus: {
+    publicationStatus: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
-      default: "pending",
+      enum: ["private", "published"],
+      default: "published",
       index: true,
     },
-    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
-    reviewedAt: { type: Date, default: null },
+    visibility: {
+      type: String,
+      enum: ["private", "public"],
+      default: "public",
+      index: true,
+    },
     fileName: { type: String, required: true, maxlength: 255 },
     emailNotificationStatus: {
       type: String,
@@ -67,17 +77,40 @@ const pyqSchema = new mongoose.Schema(
     downloadCount: { type: Number, default: 0, min: 0 },
     helpfulCount: { type: Number, default: 0, min: 0 },
     reportCount: { type: Number, default: 0, min: 0 },
+    searchNgrams: { type: [String], default: [], select: false },
+    searchIndexVersion: { type: Number, default: 0, select: false },
   },
   { timestamps: true },
 );
 
+pyqSchema.pre("validate", function indexPyqMetadata() {
+  const searchFields = [
+    "title",
+    "subject",
+    "description",
+    "university",
+    "college",
+    "department",
+    "course",
+    "examType",
+    "fileName",
+  ];
+  if (!this.isNew && !searchFields.some((field) => this.isModified(field))) {
+    return;
+  }
+  this.searchNgrams = createSearchNgrams(buildPyqSearchFields(this));
+  this.searchIndexVersion = 1;
+});
+
 pyqSchema.index({ createdAt: -1 });
-pyqSchema.index({ approvalStatus: 1, createdAt: -1 });
-pyqSchema.index({ approvalStatus: 1, helpfulCount: -1, createdAt: -1 });
-pyqSchema.index({ approvalStatus: 1, uploadedBy: 1, createdAt: -1 });
-pyqSchema.index({ approvalStatus: 1, subject: 1 });
+pyqSchema.index({ publicationStatus: 1, visibility: 1, searchNgrams: 1 });
+pyqSchema.index({ publicationStatus: 1, visibility: 1, createdAt: -1 });
+pyqSchema.index({ publicationStatus: 1, visibility: 1, helpfulCount: -1, createdAt: -1 });
+pyqSchema.index({ publicationStatus: 1, visibility: 1, uploadedBy: 1, createdAt: -1 });
+pyqSchema.index({ publicationStatus: 1, visibility: 1, subject: 1 });
 pyqSchema.index({
-  approvalStatus: 1,
+  publicationStatus: 1,
+  visibility: 1,
   department: 1,
   semester: 1,
   subject: 1,

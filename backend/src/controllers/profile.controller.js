@@ -32,7 +32,7 @@ function publicNote(note) {
     subject: note.subject,
     semester: note.semester,
     createdAt: note.createdAt,
-    downloadUrl: `/search/notes/${note._id}/download`,
+    viewPath: `/search/resources/note/${note._id}/view`,
   };
 }
 
@@ -44,7 +44,7 @@ function publicPyq(pyq) {
     subject: pyq.subject,
     semester: pyq.semester,
     createdAt: pyq.createdAt,
-    downloadUrl: `/pyqs/${pyq._id}/download`,
+    viewPath: `/search/resources/pyq/${pyq._id}/view`,
   };
 }
 
@@ -83,9 +83,13 @@ export async function getPublicProfile(request, response) {
   const noteFilter = {
     uploadedBy: user._id,
     publicationStatus: "published",
-    approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
+    visibility: { $in: ["public", null] },
   };
-  const pyqFilter = { uploadedBy: user._id, approvalStatus: "approved" };
+  const pyqFilter = {
+    uploadedBy: user._id,
+    publicationStatus: "published",
+    visibility: { $in: ["public", null] },
+  };
   const [notes, pyqs, totalNotes, totalPyqs] = await Promise.all([
     Note.find(noteFilter).select("_id title subject semester createdAt")
       .sort({ createdAt: -1 })

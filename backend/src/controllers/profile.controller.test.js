@@ -8,7 +8,7 @@ import {
   updateOwnProfile,
 } from "./profile.controller.js";
 
-test("public profile exposes only safe fields and approved contributions", async () => {
+test("public profile exposes only safe fields and published contributions", async () => {
   const originalFindOne = User.findOne;
   const originalNoteFind = Note.find;
   const originalNoteCount = Note.countDocuments;
@@ -33,9 +33,13 @@ test("public profile exposes only safe fields and approved contributions", async
   const noteFilter = {
     uploadedBy: user._id,
     publicationStatus: "published",
-    approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
+    visibility: { $in: ["public", null] },
   };
-  const pyqFilter = { uploadedBy: user._id, approvalStatus: "approved" };
+  const pyqFilter = {
+    uploadedBy: user._id,
+    publicationStatus: "published",
+    visibility: { $in: ["public", null] },
+  };
   const makeQuery = (result) => ({
     select() { return this; },
     sort() { return this; },

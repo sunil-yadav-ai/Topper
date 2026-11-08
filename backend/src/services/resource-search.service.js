@@ -4,6 +4,12 @@ import Pyq from "../models/Pyq.js";
 import ResourceHelpfulVote from "../models/ResourceHelpfulVote.js";
 import Bookmark from "../models/Bookmark.js";
 import User from "../models/User.js";
+import {
+  createSearchQuery,
+  scoreResourceSearch,
+} from "./resource-search-index.service.js";
+
+const supportedNoteMarks = new Set([2, 3, 4, 5, 6, 8, 10, 12, 15, 20]);
 
 function badRequest(message) {
   const error = new Error(message);
@@ -70,6 +76,15 @@ export function parseResourceSearchQuery(query) {
     }
   }
 
+  const marksValue = query.marks;
+  let marks;
+  if (marksValue !== undefined && marksValue !== "") {
+    marks = Number(marksValue);
+    if (!Number.isInteger(marks) || !supportedNoteMarks.has(marks)) {
+      throw badRequest("marks must be one of the supported note mark values.");
+    }
+  }
+
   return {
     q,
     resourceType,
@@ -78,6 +93,7 @@ export function parseResourceSearchQuery(query) {
     limit: parsePage(query.limit, 12, 50),
     semester,
     examinationYear,
+    marks,
     department: parseTextFilter(query, "department"),
     university: parseTextFilter(query, "university"),
     college: parseTextFilter(query, "college"),
@@ -101,22 +117,13 @@ async function findUploaderIds(filters, fields = ["college", "batch"]) {
   return User.distinct("_id", userFilter);
 }
 
-function createTextSearch(q) {
-  return q ? { $text: { $search: q } } : {};
-}
-
 function createNoteFilter(filters, uploaderIds, legacyUniversityIds) {
-  const filter = {
-    publicationStatus: "published",
-    visibility: { $in: ["public", null] },
-    approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
-  };
-  if (filters.q) Object.assign(filter, createTextSearch(filters.q));
+  const filter = { ...publishedNoteFilter };
   if (filters.semester) filter.semester = filters.semester;
+  if (filters.marks !== undefined) filter.marks = filters.marks;
   if (filters.department) filter.department = escapedPrefix(filters.department);
   if (filters.subject) filter.subject = escapedExact(filters.subject);
   if (filters.unit) filter.unit = escapedPrefix(filters.unit);
-  if (filters.topic) filter.topic = escapedPrefix(filters.topic);
   if (uploaderIds) filter.uploadedBy = { $in: uploaderIds };
   if (filters.university) {
     const universityFilter = { university: escapedExact(filters.university) };
@@ -141,24 +148,7 @@ function createNoteFilter(filters, uploaderIds, legacyUniversityIds) {
 }
 
 function createPyqFilter(filters, uploaderIds) {
-  const filter = { approvalStatus: "approved" };
-  if (filters.q) {
-    const expression = new RegExp(
-      filters.q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-      "i",
-    );
-    filter.$or = [
-      "university",
-      "college",
-      "department",
-      "course",
-      "subject",
-      "examType",
-      "fileName",
-      "title",
-      "description",
-    ].map((field) => ({ [field]: expression }));
-  }
+  const filter = { ...publishedPyqFilter };
   if (filters.semester) filter.semester = filters.semester;
   if (filters.examinationYear) filter.examinationYear = filters.examinationYear;
   for (const field of ["department", "university", "college", "subject"]) {
@@ -172,12 +162,14 @@ function createPyqFilter(filters, uploaderIds) {
   return filter;
 }
 
-const approvedNoteFilter = {
+const publishedNoteFilter = {
   publicationStatus: "published",
   visibility: { $in: ["public", null] },
-  approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
 };
-const approvedPyqFilter = { approvalStatus: "approved" };
+const publishedPyqFilter = {
+  publicationStatus: "published",
+  visibility: { $in: ["public", null] },
+};
 
 function logSearchDiagnostic(diagnostic) {
   console.info(`[resource-search] ${JSON.stringify(diagnostic)}`);
@@ -206,7 +198,8 @@ async function getPyqStatusBreakdown() {
     {
       $group: {
         _id: {
-          approvalStatus: { $ifNull: ["$approvalStatus", "(missing)"] },
+          publicationStatus: { $ifNull: ["$publicationStatus", "(missing)"] },
+          visibility: { $ifNull: ["$visibility", "(missing)"] },
         },
         count: { $sum: 1 },
       },
@@ -239,14 +232,14 @@ export async function getResourceSearchOptions(resourceType) {
   if (resourceType === "note") {
     const [subjects, topics, uploaderIds, noteUniversities, searchableDocuments] =
       await Promise.all([
-        Note.distinct("subject", approvedNoteFilter),
-        Note.distinct("topic", approvedNoteFilter),
+        Note.distinct("subject", publishedNoteFilter),
+        Note.distinct("topic", publishedNoteFilter),
         Note.distinct("uploadedBy", {
-          ...approvedNoteFilter,
+          ...publishedNoteFilter,
           $or: [{ university: { $exists: false } }, { university: "" }],
         }),
-        Note.distinct("university", approvedNoteFilter),
-        Note.countDocuments(approvedNoteFilter),
+        Note.distinct("university", publishedNoteFilter),
+        Note.countDocuments(publishedNoteFilter),
       ]);
     const legacyUniversities = uploaderIds.length
       ? await User.distinct("university", { _id: { $in: uploaderIds } })
@@ -261,15 +254,14 @@ export async function getResourceSearchOptions(resourceType) {
       endpoint: "GET /api/search/options",
       resourceType,
       collection: Note.collection.name,
-      statusFilter: approvedNoteFilter,
+      statusFilter: publishedNoteFilter,
       searchableDocuments,
       optionCounts: {
         subjects: options.subjects.length,
         topics: options.topics.length,
         universities: options.universities.length,
       },
-      excludedReason:
-        "Notes that are not published and approved (or approved with warning) are excluded.",
+      excludedReason: "Notes that are not published are excluded.",
       ...(searchableDocuments === 0
         ? { statusBreakdown: await getNoteStatusBreakdown() }
         : {}),
@@ -278,10 +270,10 @@ export async function getResourceSearchOptions(resourceType) {
   }
 
   const [subjects, universities, years, searchableDocuments] = await Promise.all([
-    Pyq.distinct("subject", approvedPyqFilter),
-    Pyq.distinct("university", approvedPyqFilter),
-    Pyq.distinct("examinationYear", approvedPyqFilter),
-    Pyq.countDocuments(approvedPyqFilter),
+    Pyq.distinct("subject", publishedPyqFilter),
+    Pyq.distinct("university", publishedPyqFilter),
+    Pyq.distinct("examinationYear", publishedPyqFilter),
+    Pyq.countDocuments(publishedPyqFilter),
   ]);
   const options = {
     subjects: sortedValues(subjects),
@@ -293,14 +285,14 @@ export async function getResourceSearchOptions(resourceType) {
     endpoint: "GET /api/search/options",
     resourceType,
     collection: Pyq.collection.name,
-    statusFilter: approvedPyqFilter,
+    statusFilter: publishedPyqFilter,
     searchableDocuments,
     optionCounts: {
       subjects: options.subjects.length,
       universities: options.universities.length,
       years: options.years.length,
     },
-    excludedReason: "Question papers that are not approved are excluded.",
+    excludedReason: "Question papers that are not published are excluded.",
     ...(searchableDocuments === 0
       ? { statusBreakdown: await getPyqStatusBreakdown() }
       : {}),
@@ -312,6 +304,68 @@ function sortFor(sort) {
   return sort === "helpful"
     ? { helpfulCount: -1, createdAt: -1, _id: 1 }
     : { createdAt: -1, _id: 1 };
+}
+
+async function findSmartSearchCandidates(Model, filter, query, fields, sort) {
+  if (!query.tokens.length) return [];
+  const expressions = [...new Set([query.normalized, ...query.tokens])]
+    .filter((value) => value.length >= 2)
+    .map((value) => new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+  const textFields = fields.flatMap((field) =>
+    expressions.map((expression) => ({ [field]: expression })),
+  );
+  const rows = await Model.aggregate([
+    { $match: filter },
+    {
+      $match: {
+        $or: [
+          { searchNgrams: { $in: query.ngrams } },
+          ...textFields,
+        ],
+      },
+    },
+    {
+      $addFields: {
+        _smartSearchOverlap: {
+          $size: {
+            $setIntersection: [
+              { $ifNull: ["$searchNgrams", []] },
+              query.ngrams,
+            ],
+          },
+        },
+      },
+    },
+    {
+      $sort: {
+        _smartSearchOverlap: -1,
+        ...sort,
+      },
+    },
+    { $limit: 1000 },
+  ]);
+  const populated = await Model.populate(rows, {
+    path: "uploadedBy",
+    select:
+      Model === Note
+        ? "university college batch fullName username"
+        : "batch fullName username",
+  });
+  return populated
+    .map((resource) => ({
+      ...resource,
+      ...scoreResourceSearch(resource, query),
+    }))
+    .filter((resource) => resource.rank > 0)
+    .sort((left, right) =>
+      right.rank - left.rank ||
+      right.score - left.score ||
+      (sort.helpfulCount
+        ? (right.helpfulCount ?? 0) - (left.helpfulCount ?? 0)
+        : 0) ||
+      new Date(right.createdAt) - new Date(left.createdAt) ||
+      left._id.toString().localeCompare(right._id.toString()),
+    );
 }
 
 function asNote(note) {
@@ -340,7 +394,8 @@ function asNote(note) {
     downloadCount: note.downloadCount ?? 0,
     helpfulCount: note.helpfulCount ?? 0,
     createdAt: note.createdAt,
-    downloadUrl: `/search/notes/${note._id}/download`,
+    previewPath: `/search/resources/note/${note._id}/preview`,
+    viewPath: `/search/resources/note/${note._id}/view`,
   };
 }
 
@@ -369,7 +424,7 @@ function asPyq(pyq) {
         }
       : null,
     createdAt: pyq.createdAt,
-    downloadUrl: `/pyqs/${pyq._id}/download`,
+    viewPath: `/search/resources/pyq/${pyq._id}/view`,
   };
 }
 
@@ -393,31 +448,71 @@ export async function searchResources(query, userId = null) {
   const requestedPyqs = filters.resourceType !== "note";
   const sourceLimit = filters.page * filters.limit + 1;
   const order = sortFor(filters.sort);
-
-  const [notes, pyqs, noteCount, pyqCount] = await Promise.all([
-    includeNotes
-      ? Note.find(noteFilter)
-          .populate("uploadedBy", "university college batch fullName username")
-          .sort(order)
-          .limit(sourceLimit)
-          .lean()
-      : [],
-    includePyqs
-      ? Pyq.find(pyqFilter)
-          .populate("uploadedBy", "batch fullName username")
-          .sort(order)
-          .limit(sourceLimit)
-          .lean()
-      : [],
-    includeNotes ? Note.countDocuments(noteFilter) : 0,
-    includePyqs ? Pyq.countDocuments(pyqFilter) : 0,
-  ]);
+  const searchText = [filters.q, filters.topic].filter(Boolean).join(" ");
+  const smartQuery = searchText ? createSearchQuery(searchText) : null;
+  let notes;
+  let pyqs;
+  let noteCount;
+  let pyqCount;
+  if (smartQuery) {
+    [notes, pyqs] = await Promise.all([
+      includeNotes
+        ? findSmartSearchCandidates(
+            Note,
+            noteFilter,
+            smartQuery,
+            ["title", "subject", "topic", "unit", "description", "fileName"],
+            order,
+          )
+        : [],
+      includePyqs
+        ? findSmartSearchCandidates(
+            Pyq,
+            pyqFilter,
+            smartQuery,
+            [
+              "title",
+              "subject",
+              "description",
+              "university",
+              "college",
+              "department",
+              "course",
+              "examType",
+              "fileName",
+            ],
+            order,
+          )
+        : [],
+    ]);
+    noteCount = notes.length;
+    pyqCount = pyqs.length;
+  } else {
+    [notes, pyqs, noteCount, pyqCount] = await Promise.all([
+      includeNotes
+        ? Note.find(noteFilter)
+            .populate("uploadedBy", "university college batch fullName username")
+            .sort(order)
+            .limit(sourceLimit)
+            .lean()
+        : [],
+      includePyqs
+        ? Pyq.find(pyqFilter)
+            .populate("uploadedBy", "batch fullName username")
+            .sort(order)
+            .limit(sourceLimit)
+            .lean()
+        : [],
+      includeNotes ? Note.countDocuments(noteFilter) : 0,
+      includePyqs ? Pyq.countDocuments(pyqFilter) : 0,
+    ]);
+  }
   const [searchableNoteCount, searchablePyqCount] = await Promise.all([
     requestedNotes && noteCount === 0
-      ? Note.countDocuments(approvedNoteFilter)
+      ? Note.countDocuments(publishedNoteFilter)
       : null,
     requestedPyqs && pyqCount === 0
-      ? Pyq.countDocuments(approvedPyqFilter)
+      ? Pyq.countDocuments(publishedPyqFilter)
       : null,
   ]);
   const statusBreakdowns = await Promise.all([
@@ -436,7 +531,7 @@ export async function searchResources(query, userId = null) {
         ? [
             {
               name: Note.collection.name,
-              statusFilter: approvedNoteFilter,
+              statusFilter: publishedNoteFilter,
               matchingDocuments: noteCount,
               documentsReturned: notes.length,
               ...(searchableNoteCount !== null
@@ -452,7 +547,7 @@ export async function searchResources(query, userId = null) {
         ? [
             {
               name: Pyq.collection.name,
-              statusFilter: approvedPyqFilter,
+              statusFilter: publishedPyqFilter,
               matchingDocuments: pyqCount,
               documentsReturned: pyqs.length,
               ...(searchablePyqCount !== null
@@ -471,7 +566,7 @@ export async function searchResources(query, userId = null) {
           excludedReason:
             (!requestedNotes || searchableNoteCount === 0) &&
             (!requestedPyqs || searchablePyqCount === 0)
-              ? "No documents satisfy the published/approved status filters."
+              ?               "No documents satisfy the published status filters."
               : "No searchable documents matched all supplied search filters.",
         }
       : {}),
@@ -492,13 +587,23 @@ export async function searchResources(query, userId = null) {
   const combined = [
     ...notes.map((note) => ({
       ...asNote(note),
+      _searchRank: note.rank ?? 0,
+      _searchScore: note.score ?? 0,
       isBookmarked: bookmarkKeys.has(`note:${note._id}`),
     })),
     ...pyqs.map((pyq) => ({
       ...asPyq(pyq),
+      _searchRank: pyq.rank ?? 0,
+      _searchScore: pyq.score ?? 0,
       isBookmarked: bookmarkKeys.has(`pyq:${pyq._id}`),
     })),
   ].sort((left, right) => {
+    if (smartQuery && right._searchRank !== left._searchRank) {
+      return right._searchRank - left._searchRank;
+    }
+    if (smartQuery && right._searchScore !== left._searchScore) {
+      return right._searchScore - left._searchScore;
+    }
     if (filters.sort === "helpful" && right.helpfulCount !== left.helpfulCount) {
       return right.helpfulCount - left.helpfulCount;
     }
@@ -509,7 +614,9 @@ export async function searchResources(query, userId = null) {
   const total = noteCount + pyqCount;
 
   return {
-    resources: combined.slice(offset, offset + filters.limit),
+    resources: combined
+      .slice(offset, offset + filters.limit)
+      .map(({ _searchRank, _searchScore, ...resource }) => resource),
     pagination: {
       page: filters.page,
       limit: filters.limit,
@@ -544,8 +651,8 @@ export async function suggestResources(query) {
     throw badRequest("Topic suggestions are available for notes only.");
   }
   const startsWith = escapedPrefix(prefix);
-  const noteFilter = approvedNoteFilter;
-  const pyqFilter = approvedPyqFilter;
+  const noteFilter = publishedNoteFilter;
+  const pyqFilter = publishedPyqFilter;
   const jobs = [];
   if (resourceType !== "pyq") {
     if (query.field === "topic") {
@@ -587,18 +694,15 @@ export async function markResourceHelpful(resourceType, resourceId, userId) {
   if (!mongoose.isValidObjectId(resourceId)) {
     throw badRequest("Resource ID is invalid.");
   }
-  const filter = resourceType === "note"
-    ? {
-        _id: resourceId,
-        publicationStatus: "published",
-        visibility: { $in: ["public", null] },
-        approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
-      }
-    : { _id: resourceId, approvalStatus: "approved" };
+  const filter = {
+    _id: resourceId,
+    publicationStatus: "published",
+    visibility: { $in: ["public", null] },
+  };
   const ResourceModel = resourceType === "note" ? Note : Pyq;
   const resource = await ResourceModel.findOne(filter).select("_id");
   if (!resource) {
-    const error = new Error("Approved resource not found.");
+    const error = new Error("Published resource not found.");
     error.statusCode = 404;
     throw error;
   }
@@ -626,7 +730,7 @@ export async function markResourceHelpful(resourceType, resourceId, userId) {
       resource: resource._id,
       user: userId,
     });
-    const error = new Error("Approved resource not found.");
+    const error = new Error("Published resource not found.");
     error.statusCode = 404;
     throw error;
   }

@@ -6,7 +6,14 @@ import {
 } from "../services/resource-search.service.js";
 import mongoose from "mongoose";
 import Note from "../models/Note.js";
-import { getPrivateNoteDownloadUrl } from "../services/note-storage.service.js";
+import Pyq from "../models/Pyq.js";
+import {
+  getPrivateNoteDownloadUrl,
+  getPrivateNotePreviewUrl,
+} from "../services/note-storage.service.js";
+import { ensureNotePreview } from "../services/note-preview.service.js";
+import { getPyqFileUrl } from "../services/pyq-storage.service.js";
+import { streamResourceView } from "../services/resource-view.service.js";
 import {
   migrateLegacyPyqBookmarks,
   recordResourceAccess,
@@ -43,34 +50,91 @@ export async function markSearchResultHelpful(request, response) {
   });
 }
 
-export async function downloadApprovedNote(request, response) {
-  if (!mongoose.isValidObjectId(request.params.noteId)) {
-    const error = new Error("Note ID is invalid.");
+export async function viewResource(request, response) {
+  const { resourceType, resourceId } = request.params;
+  if (!["note", "pyq"].includes(resourceType)) {
+    const error = new Error("Resource type must be note or pyq.");
     error.statusCode = 400;
     throw error;
   }
-  const note = await Note.findOneAndUpdate(
-    {
-      _id: request.params.noteId,
-      publicationStatus: "published",
-      visibility: { $in: ["public", null] },
-      approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
-    },
-    { $inc: { downloadCount: 1 } },
-    { new: true },
-  );
-  if (!note) {
-    const error = new Error("Approved note not found.");
+  if (!mongoose.isValidObjectId(resourceId)) {
+    const error = new Error("Resource ID is invalid.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const Model = resourceType === "note" ? Note : Pyq;
+  const resource = await Model.findById(resourceId);
+  if (!resource) {
+    const error = new Error("Resource not found.");
     error.statusCode = 404;
     throw error;
   }
-  if (request.user?.role === "user") {
+  const isPublic =
+    resource.publicationStatus === "published" &&
+    ["public", null, undefined].includes(resource.visibility);
+  const isOwner = resource.uploadedBy?.equals(request.user._id) ?? false;
+  if (!isPublic && !isOwner && request.user.role !== "admin") {
+    const error = new Error("Resource not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+  if (request.user.role === "user") {
     await recordResourceAccess({
       userId: request.user._id,
-      resourceType: "note",
-      resourceId: note._id,
-      downloaded: true,
+      resourceType,
+      resourceId: resource._id,
     });
   }
-  response.redirect(getPrivateNoteDownloadUrl(note.storage));
+
+  await streamResourceView(request, response, {
+    url: resourceType === "note"
+      ? getPrivateNoteDownloadUrl(resource.storage)
+      : getPyqFileUrl(resource.storage),
+    format: resource.storage.format ?? "pdf",
+    fileName: resource.fileName,
+  });
+}
+
+export async function viewNotePreview(request, response) {
+  if (!mongoose.isValidObjectId(request.params.resourceId)) {
+    const error = new Error("Resource ID is invalid.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const note = await Note.findById(request.params.resourceId);
+  if (!note) {
+    const error = new Error("Resource not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const isPublic =
+    note.publicationStatus === "published" &&
+    ["public", null, undefined].includes(note.visibility);
+  const isOwner = request.user
+    ? note.uploadedBy?.equals(request.user._id) ?? false
+    : false;
+  if (!isPublic && !isOwner && request.user?.role !== "admin") {
+    const error = new Error("Resource not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (note.storage.format === "pdf" && !note.previewStorage?.publicId) {
+    try {
+      await ensureNotePreview(note);
+    } catch (error) {
+      console.error(`Could not generate preview for note ${note._id}.`, error);
+      response.status(503).json({
+        status: "error",
+        message: "The document preview is temporarily unavailable.",
+      });
+      return;
+    }
+  }
+
+  response.set("Cross-Origin-Resource-Policy", "cross-origin");
+  response.redirect(302, getPrivateNotePreviewUrl(note));
 }

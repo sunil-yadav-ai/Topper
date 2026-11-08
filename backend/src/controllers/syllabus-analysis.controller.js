@@ -1,4 +1,5 @@
 import { basename } from "node:path";
+import { createHash } from "node:crypto";
 import mongoose from "mongoose";
 import multer from "multer";
 import SyllabusAnalysis from "../models/SyllabusAnalysis.js";
@@ -54,6 +55,17 @@ function serializeSummary(analysis) {
   };
 }
 
+function serializeAnalysis(analysis) {
+  const data = decryptJson(analysis.encryptedAnalysis);
+  data.structure = data.structure?.subjects?.length
+    ? normalizeSyllabusStructure(data.structure, { allowEmpty: true })
+    : { course: null, semester: null, subjects: [] };
+  return {
+    ...serializeSummary(analysis),
+    ...data,
+  };
+}
+
 async function findOwnedAnalysis(request) {
   if (!mongoose.isValidObjectId(request.params.analysisId)) {
     throw badRequest("Syllabus analysis ID is invalid.");
@@ -75,17 +87,73 @@ export async function uploadSyllabus(request, response) {
     throw badRequest("Choose a syllabus PDF or image to upload.");
   }
   const fileInfo = validateSyllabusFile(request.file);
+  const sourceHash = createHash("sha256").update(request.file.buffer).digest("hex");
   const emptyEncryptedAnalysis = encryptSyllabusAnalysis({
     pages: [],
-    structure: { subjects: [] },
+    structure: { course: null, semester: null, subjects: [] },
     resources: null,
   });
-  const analysis = await SyllabusAnalysis.create({
+  const existing = await SyllabusAnalysis.findOne({
     uploadedBy: request.user._id,
-    fileName: basename(request.file.originalname.replace(/\\/g, "/")).slice(0, 255),
-    status: "processing",
-    encryptedAnalysis: emptyEncryptedAnalysis,
-  });
+    sourceHash,
+  }).select("+encryptedAnalysis");
+  let analysis;
+  if (existing) {
+    if (existing.status !== "failed") {
+      response.json({
+        status: "success",
+        message: "This syllabus is already in your analyses.",
+        analysis: serializeAnalysis(existing),
+      });
+      return;
+    }
+    analysis = await SyllabusAnalysis.findOneAndUpdate(
+      { _id: existing._id, status: "failed" },
+      {
+        $set: {
+          status: "processing",
+          encryptedAnalysis: emptyEncryptedAnalysis,
+        },
+        $unset: { processingError: 1 },
+      },
+      { new: true, runValidators: true },
+    ).select("+encryptedAnalysis");
+    if (!analysis) {
+      const current = await SyllabusAnalysis.findById(existing._id)
+        .select("+encryptedAnalysis");
+      if (!current) throw new Error("Duplicate syllabus record disappeared during retry.");
+      response.json({
+        status: "success",
+        message: "This syllabus is already in your analyses.",
+        analysis: serializeAnalysis(current),
+      });
+      return;
+    }
+  }
+  else {
+    try {
+      analysis = await SyllabusAnalysis.create({
+        uploadedBy: request.user._id,
+        sourceHash,
+        fileName: basename(request.file.originalname.replace(/\\/g, "/")).slice(0, 255),
+        status: "processing",
+        encryptedAnalysis: emptyEncryptedAnalysis,
+      });
+    } catch (error) {
+      if (error.code !== 11000) throw error;
+      const duplicate = await SyllabusAnalysis.findOne({
+        uploadedBy: request.user._id,
+        sourceHash,
+      }).select("+encryptedAnalysis");
+      if (!duplicate) throw error;
+      response.json({
+        status: "success",
+        message: "This syllabus is already in your analyses.",
+        analysis: serializeAnalysis(duplicate),
+      });
+      return;
+    }
+  }
 
   try {
     const extracted = await extractAndOrganizeSyllabus(request.file, fileInfo.format);
@@ -108,9 +176,11 @@ export async function uploadSyllabus(request, response) {
   } catch (error) {
     analysis.status = "failed";
     const processingFailed = !error.statusCode || error.statusCode >= 500;
-    analysis.processingError = processingFailed
-      ? "Syllabus analysis failed. Please try again or upload a clearer file."
-      : error.message;
+    analysis.processingError = error.expose
+      ? error.message
+      : processingFailed
+        ? "Syllabus analysis failed. Please try again or upload a clearer file."
+        : error.message;
     await analysis.save();
     if (processingFailed) {
       console.error("Syllabus analysis failed:", error);
@@ -136,13 +206,9 @@ export async function listSyllabusAnalyses(request, response) {
 
 export async function getSyllabusAnalysis(request, response) {
   const analysis = await findOwnedAnalysis(request);
-  const data = decryptJson(analysis.encryptedAnalysis);
   response.json({
     status: "success",
-    analysis: {
-      ...serializeSummary(analysis),
-      ...data,
-    },
+    analysis: serializeAnalysis(analysis),
   });
 }
 
@@ -207,6 +273,14 @@ export async function confirmSyllabusAndFindResources(request, response) {
     throw badRequest("Review and save the extracted syllabus before searching resources.");
   }
   const data = decryptJson(analysis.encryptedAnalysis);
+  const hasPartiallyReadablePages = (data.pages ?? []).some(
+    (page) => page.readabilityStatus === "partially_readable",
+  );
+  if (hasPartiallyReadablePages && request.body?.reviewedPartialPages !== true) {
+    throw badRequest(
+      "Review the partially readable source pages and confirm that you corrected any missed content.",
+    );
+  }
   const structure = normalizeSyllabusStructure(data.structure);
   const resources = await findSyllabusResources(structure);
   data.structure = structure;

@@ -5,10 +5,8 @@ import Pyq from "../models/Pyq.js";
 import PyqReport from "../models/PyqReport.js";
 import Bookmark from "../models/Bookmark.js";
 import User from "../models/User.js";
-import { awardContribution } from "../services/reward.service.js";
 import {
   deletePyqFile,
-  getPyqFileUrl,
   uploadPyqFile,
 } from "../services/pyq-storage.service.js";
 import {
@@ -18,11 +16,11 @@ import {
 import {
   getStudentLibrary,
   migrateLegacyPyqBookmarks,
-  recordResourceAccess,
   removeLibraryBookmarkByResource,
   saveLibraryBookmark,
 } from "../services/student-library.service.js";
 import { sendResourceUploadEmail } from "../services/email-notification.service.js";
+import { awardContribution } from "../services/reward.service.js";
 
 const maxFileSize = 20 * 1024 * 1024;
 const upload = multer({
@@ -87,12 +85,14 @@ function serializePyq(pyq, savedIds = new Set()) {
     downloadCount: pyq.downloadCount,
     reportCount: pyq.reportCount,
     helpfulCount: pyq.helpfulCount ?? 0,
-    approvalStatus: pyq.approvalStatus ?? "pending",
+    publicationStatus: pyq.publicationStatus ?? "published",
+    visibility: pyq.visibility ?? "public",
     uploadedBy: pyq.uploadedBy?.fullName ?? "Student",
     uploadedByUsername: pyq.uploadedBy?.username ?? null,
     uploadedByAvatarUrl: pyq.uploadedBy?.avatarUrl ?? "",
     isBookmarked: savedIds.has(pyq._id.toString()),
     createdAt: pyq.createdAt,
+    viewPath: `/search/resources/pyq/${pyq._id}/view`,
   };
 }
 
@@ -110,7 +110,10 @@ export async function browsePyqs(request, response) {
     throw badRequest("Limit must be a whole number between 1 and 50.");
   }
 
-  const filter = { approvalStatus: "approved" };
+  const filter = {
+    publicationStatus: "published",
+    visibility: { $in: ["public", null] },
+  };
   for (const [parameter, field, min, max] of [
     ["semester", "semester", 1, 12],
     ["examinationYear", "examinationYear", 1900, new Date().getFullYear() + 1],
@@ -182,25 +185,8 @@ export async function getMyUploadedPyqs(request, response) {
     status: "success",
     pyqs: pyqs.map((pyq) => ({
       ...serializePyq(pyq),
-      downloadUrl: `/pyqs/mine/${pyq._id}/file`,
     })),
   });
-}
-
-export async function downloadMyPyqFile(request, response) {
-  if (!mongoose.isValidObjectId(request.params.pyqId)) {
-    throw badRequest("Question paper ID is invalid.");
-  }
-  const pyq = await Pyq.findOne({
-    _id: request.params.pyqId,
-    uploadedBy: request.user._id,
-  }).select("+storage");
-  if (!pyq) {
-    const error = new Error("Your uploaded question paper was not found.");
-    error.statusCode = 404;
-    throw error;
-  }
-  response.redirect(getPyqFileUrl(pyq.storage));
 }
 
 export async function uploadPyq(request, response) {
@@ -226,6 +212,20 @@ export async function uploadPyq(request, response) {
     throw error;
   }
 
+  try {
+    await awardContribution({
+      userId: request.user._id,
+      actorId: request.user._id,
+      type: "pyq",
+      sourceType: "pyq",
+      sourceId: pyq._id,
+      title: `${pyq.subject} ${pyq.examinationYear} PYQ`,
+      reason: "Question paper was automatically published after a successful upload.",
+    });
+  } catch (error) {
+    console.error(`Could not award points for PYQ ${pyq._id}:`, error);
+  }
+
   await sendResourceUploadEmail({
     Model: Pyq,
     resourceId: pyq._id.toString(),
@@ -233,40 +233,15 @@ export async function uploadPyq(request, response) {
     studentName: request.user.fullName,
     resourceName: `${pyq.subject} - ${pyq.examinationYear} ${pyq.examType} question paper`,
     category: "Previous year question paper",
-    status: "Successfully uploaded; pending approval",
+    status: "Successfully uploaded and published",
     uploadedAt: pyq.createdAt,
   });
 
   response.status(201).json({
     status: "success",
-    message: "Question paper submitted for approval before it appears publicly.",
+    message: "Question paper is now public in Explore.",
     pyq: serializePyq(pyq),
   });
-}
-
-export async function downloadPyq(request, response) {
-  if (!mongoose.isValidObjectId(request.params.pyqId)) {
-    throw badRequest("Question paper ID is invalid.");
-  }
-  const pyq = await Pyq.findOneAndUpdate(
-    { _id: request.params.pyqId, approvalStatus: "approved" },
-    { $inc: { downloadCount: 1 } },
-    { new: true },
-  );
-  if (!pyq) {
-    const error = new Error("Approved question paper not found.");
-    error.statusCode = 404;
-    throw error;
-  }
-  if (request.user?.role === "user") {
-    await recordResourceAccess({
-      userId: request.user._id,
-      resourceType: "pyq",
-      resourceId: pyq._id,
-      downloaded: true,
-    });
-  }
-  response.redirect(getPyqFileUrl(pyq.storage));
 }
 
 export async function getMyBookmarks(request, response) {
@@ -293,7 +268,8 @@ export async function bookmarkPyq(request, response) {
   }
   const pyq = await Pyq.findOne({
     _id: request.params.pyqId,
-    approvalStatus: "approved",
+    publicationStatus: "published",
+    visibility: { $in: ["public", null] },
   }).select("_id");
   if (!pyq) {
     const error = new Error("Question paper not found.");
@@ -330,7 +306,8 @@ export async function reportPyq(request, response) {
   }
   const pyq = await Pyq.findOne({
     _id: request.params.pyqId,
-    approvalStatus: "approved",
+    publicationStatus: "published",
+    visibility: { $in: ["public", null] },
   }).select("_id");
   if (!pyq) {
     const error = new Error("Question paper not found.");
@@ -363,87 +340,5 @@ export async function reportPyq(request, response) {
   response.status(201).json({
     status: "success",
     message: "Thank you. Your report was sent for review.",
-  });
-}
-
-export async function getPyqsForReview(_request, response) {
-  const pyqs = await Pyq.find({
-    $or: [
-      { approvalStatus: "pending" },
-      { approvalStatus: { $exists: false } },
-    ],
-  })
-    .populate("uploadedBy", "fullName email")
-    .sort({ createdAt: 1 })
-    .limit(100)
-    .lean();
-  response.json({
-    status: "success",
-    pyqs: pyqs.map((pyq) => ({
-      ...serializePyq(pyq),
-      approvalStatus: pyq.approvalStatus ?? "pending",
-      uploaderEmail: pyq.uploadedBy?.email ?? "",
-      reviewUrl: getPyqFileUrl(pyq.storage),
-    })),
-  });
-}
-
-export async function reviewPyq(request, response) {
-  if (!mongoose.isValidObjectId(request.params.pyqId)) {
-    throw badRequest("Question paper ID is invalid.");
-  }
-  const { approvalStatus } = request.body;
-  if (!["approved", "rejected"].includes(approvalStatus)) {
-    throw badRequest("approvalStatus must be approved or rejected.");
-  }
-  const pyq = await Pyq.findOneAndUpdate(
-    {
-      _id: request.params.pyqId,
-      $or: [
-        { approvalStatus: "pending" },
-        { approvalStatus: { $exists: false } },
-      ],
-    },
-    {
-      $set: {
-        approvalStatus,
-        reviewedBy: request.user._id,
-        reviewedAt: new Date(),
-      },
-    },
-    { new: true, runValidators: true },
-  );
-  if (!pyq) {
-    const error = new Error("Pending question paper not found.");
-    error.statusCode = 404;
-    throw error;
-  }
-  let rewardMessage = "";
-  if (approvalStatus === "approved") {
-    try {
-      const reward = await awardContribution({
-        userId: pyq.uploadedBy,
-        reviewerId: request.user._id,
-        type: "pyq",
-        sourceType: "pyq",
-        sourceId: pyq._id,
-        title: `${pyq.subject} ${pyq.examinationYear} ${pyq.examType}`,
-      });
-      rewardMessage = reward.awarded
-        ? ` The uploader earned ${reward.points} points.`
-        : reward.unfunded
-          ? " No points were distributed because the platform reward budget is exhausted."
-          : "";
-    } catch (error) {
-      console.error(`Could not reward the uploader of approved PYQ ${pyq._id}:`, error);
-      rewardMessage = " Reward distribution needs administrator follow-up.";
-    }
-  }
-  response.json({
-    status: "success",
-    message: approvalStatus === "approved"
-      ? `Question paper approved and now publicly searchable.${rewardMessage}`
-      : "Question paper rejected and kept private.",
-    pyq: serializePyq(pyq),
   });
 }

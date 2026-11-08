@@ -2,9 +2,13 @@ import mongoose from "mongoose";
 import User from "../models/User.js";
 import { env } from "./env.js";
 import { createUniqueUsername } from "../services/username.service.js";
+import { migrateResourcesToPublicViewing } from "../services/resource-migration.service.js";
+import { migrateResourceSearchIndexes } from "../services/resource-search-index-migration.service.js";
 
 export async function connectDatabase() {
   await mongoose.connect(env.mongodbUri);
+  await migrateResourcesToPublicViewing();
+  await migrateResourceSearchIndexes();
   const migration = await User.updateMany(
     { role: "student" },
     { $set: { role: "user" } },

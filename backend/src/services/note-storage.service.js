@@ -91,6 +91,36 @@ export async function uploadNoteFile(file, format) {
   };
 }
 
+export async function uploadNotePreview(buffer) {
+  const storage = getCloudinary();
+  const result = await new Promise((resolve, reject) => {
+    const upload = storage.uploader.upload_stream(
+      {
+        folder: "student-notes/previews",
+        public_id: randomUUID(),
+        resource_type: "image",
+        type: "authenticated",
+        overwrite: false,
+        format: "png",
+      },
+      (error, uploaded) => {
+        if (error) reject(error);
+        else resolve(uploaded);
+      },
+    );
+    upload.end(buffer);
+  });
+
+  return {
+    provider: "cloudinary",
+    publicId: result.public_id,
+    resourceType: "image",
+    format: "png",
+    mimeType: "image/png",
+    bytes: buffer.length,
+  };
+}
+
 export async function deleteNoteFile(storageInfo) {
   const storage = getCloudinary();
   const result = await storage.uploader.destroy(storageInfo.publicId, {
@@ -104,6 +134,21 @@ export async function deleteNoteFile(storageInfo) {
   }
 }
 
+export async function deleteNotePreview(storageInfo) {
+  if (!storageInfo) return;
+
+  const storage = getCloudinary();
+  const result = await storage.uploader.destroy(storageInfo.publicId, {
+    resource_type: "image",
+    type: "authenticated",
+    invalidate: true,
+  });
+
+  if (!["ok", "not found"].includes(result.result)) {
+    throw new Error("The stored note preview could not be deleted.");
+  }
+}
+
 export function getPrivateNoteDownloadUrl(storageInfo) {
   const storage = getCloudinary();
   return storage.utils.private_download_url(
@@ -111,6 +156,28 @@ export function getPrivateNoteDownloadUrl(storageInfo) {
     storageInfo.format,
     {
       resource_type: storageInfo.resourceType,
+      type: "authenticated",
+      expires_at: Math.floor(Date.now() / 1000) + 300,
+    },
+  );
+}
+
+export function getPrivateNotePreviewUrl(note) {
+  const previewStorage = note.previewStorage?.publicId
+    ? note.previewStorage
+    : note.storage.resourceType === "image"
+      ? note.storage
+      : null;
+  if (!previewStorage) {
+    throw new Error("A preview image has not been generated for this note.");
+  }
+
+  const storage = getCloudinary();
+  return storage.utils.private_download_url(
+    previewStorage.publicId,
+    previewStorage.format,
+    {
+      resource_type: "image",
       type: "authenticated",
       expires_at: Math.floor(Date.now() / 1000) + 300,
     },

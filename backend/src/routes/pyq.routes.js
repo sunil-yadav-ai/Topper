@@ -2,15 +2,11 @@ import { Router } from "express";
 import {
   bookmarkPyq,
   browsePyqs,
-  downloadMyPyqFile,
-  downloadPyq,
   getMyUploadedPyqs,
   getMyBookmarks,
-  getPyqsForReview,
   receivePyqPdf,
   removePyqBookmark,
   reportPyq,
-  reviewPyq,
   uploadPyq,
 } from "../controllers/pyq.controller.js";
 import {
@@ -22,31 +18,12 @@ import {
 const pyqRouter = Router();
 
 pyqRouter.get(
-  "/review",
-  requireAuth,
-  requireRole("admin"),
-  getPyqsForReview,
-);
-pyqRouter.patch(
-  "/:pyqId/approval",
-  requireAuth,
-  requireRole("admin"),
-  reviewPyq,
-);
-pyqRouter.get(
   "/mine",
   requireAuth,
   requireRole("user"),
   getMyUploadedPyqs,
 );
-pyqRouter.get(
-  "/mine/:pyqId/file",
-  requireAuth,
-  requireRole("user"),
-  downloadMyPyqFile,
-);
 pyqRouter.get("/", optionalAuth, browsePyqs);
-pyqRouter.get("/:pyqId/download", optionalAuth, downloadPyq);
 pyqRouter.post("/", requireAuth, requireRole("user"), receivePyqPdf, uploadPyq);
 pyqRouter.get(
   "/bookmarks",

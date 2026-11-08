@@ -1,10 +1,11 @@
 import { Router } from "express";
 import {
   getResourceSearchOptionsCollection,
-  downloadApprovedNote,
   markSearchResultHelpful,
   searchResourceCollection,
   suggestResourceCollection,
+  viewNotePreview,
+  viewResource,
 } from "../controllers/resource-search.controller.js";
 import {
   optionalAuth,
@@ -18,9 +19,15 @@ resourceSearchRouter.get("/", optionalAuth, searchResourceCollection);
 resourceSearchRouter.get("/options", getResourceSearchOptionsCollection);
 resourceSearchRouter.get("/suggestions", suggestResourceCollection);
 resourceSearchRouter.get(
-  "/notes/:noteId/download",
+  "/resources/note/:resourceId/preview",
   optionalAuth,
-  downloadApprovedNote,
+  viewNotePreview,
+);
+resourceSearchRouter.get(
+  "/resources/:resourceType/:resourceId/view",
+  requireAuth,
+  requireRole("user", "admin"),
+  viewResource,
 );
 resourceSearchRouter.post(
   "/:resourceType/:resourceId/helpful",

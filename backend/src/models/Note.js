@@ -1,4 +1,8 @@
 import mongoose from "mongoose";
+import {
+  buildNoteSearchFields,
+  createSearchNgrams,
+} from "../services/resource-search-index.service.js";
 
 const noteSchema = new mongoose.Schema(
   {
@@ -12,6 +16,8 @@ const noteSchema = new mongoose.Schema(
     marks: { type: Number, min: 1, max: 100000 },
     unit: { type: String, trim: true, maxlength: 80, default: "" },
     topic: { type: String, trim: true, maxlength: 160, default: "" },
+    keywords: [{ type: String, trim: true, maxlength: 80 }],
+    tags: [{ type: String, trim: true, maxlength: 80 }],
     uploadedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -28,6 +34,8 @@ const noteSchema = new mongoose.Schema(
     emailNotificationSentAt: { type: Date, default: null, select: false },
     downloadCount: { type: Number, default: 0, min: 0 },
     helpfulCount: { type: Number, default: 0, min: 0 },
+    searchNgrams: { type: [String], default: [], select: false },
+    searchIndexVersion: { type: Number, default: 0, select: false },
     storage: {
       provider: { type: String, enum: ["cloudinary"], required: true },
       publicId: { type: String, required: true },
@@ -35,6 +43,14 @@ const noteSchema = new mongoose.Schema(
       format: { type: String, enum: ["pdf", "jpg", "jpeg", "png"], required: true },
       mimeType: { type: String, required: true },
       bytes: { type: Number, required: true, min: 1 },
+    },
+    previewStorage: {
+      provider: { type: String, enum: ["cloudinary"] },
+      publicId: { type: String },
+      resourceType: { type: String, enum: ["image"] },
+      format: { type: String, enum: ["png"] },
+      mimeType: { type: String },
+      bytes: { type: Number, min: 1 },
     },
     verificationStatus: {
       type: String,
@@ -129,7 +145,27 @@ const noteSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+noteSchema.pre("validate", function indexNoteMetadata() {
+  const searchFields = [
+    "title",
+    "subject",
+    "topic",
+    "unit",
+    "description",
+    "department",
+    "university",
+    "keywords",
+    "tags",
+  ];
+  if (!this.isNew && !searchFields.some((field) => this.isModified(field))) {
+    return;
+  }
+  this.searchNgrams = createSearchNgrams(buildNoteSearchFields(this));
+  this.searchIndexVersion = 1;
+});
+
 noteSchema.index({ uploadedBy: 1, createdAt: -1 });
+noteSchema.index({ publicationStatus: 1, visibility: 1, searchNgrams: 1 });
 noteSchema.index({
   publicationStatus: 1,
   approvalDecision: 1,

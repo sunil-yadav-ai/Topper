@@ -19,7 +19,7 @@ import {
 
 const publicNotes = {
   publicationStatus: "published",
-  approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
+  visibility: { $in: ["public", null] },
 };
 
 function badRequest(message) {
@@ -157,7 +157,7 @@ export async function adjustStudentRewards(request, response) {
 export async function awardHighQualityResource(request, response) {
   const { resourceType, resourceId } = request.body ?? {};
   if (!["note", "pyq"].includes(resourceType) || !mongoose.isValidObjectId(resourceId)) {
-    throw badRequest("Choose an approved note or PYQ.");
+    throw badRequest("Choose a published note or PYQ.");
   }
   const reason =
     typeof request.body.reason === "string" ? request.body.reason.trim() : "";
@@ -169,11 +169,15 @@ export async function awardHighQualityResource(request, response) {
       ? await Note.findOne({ _id: resourceId, ...publicNotes }).select(
           "title uploadedBy",
         )
-      : await Pyq.findOne({ _id: resourceId, approvalStatus: "approved" }).select(
+      : await Pyq.findOne({
+          _id: resourceId,
+          publicationStatus: "published",
+          visibility: { $in: ["public", null] },
+        }).select(
           "subject examinationYear uploadedBy",
         );
   if (!resource) {
-    const error = new Error("Approved resource not found.");
+    const error = new Error("Published resource not found.");
     error.statusCode = 404;
     throw error;
   }

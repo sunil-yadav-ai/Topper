@@ -110,7 +110,6 @@ export async function createNoteCommunityReport(request, response) {
   const note = await Note.findOne({
     _id: request.params.noteId,
     publicationStatus: "published",
-    approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
   }).select("title uploadedBy ocrPageCount");
   if (!note) throw notFound("Published note not found.");
   if (note.uploadedBy.equals(request.user._id)) {

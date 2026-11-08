@@ -108,19 +108,17 @@ test("requires human review for too few statements or unreliable analysis", () =
   assert.equal(unreadable.mistakePercentage, null);
 });
 
-test("publishes only approved decisions and keeps review or rejected notes private", () => {
-  assert.deepEqual(getNotePublicationFields("APPROVED"), {
-    publicationStatus: "published",
-    visibility: "public",
-  });
-  assert.deepEqual(getNotePublicationFields("APPROVED_WITH_WARNING"), {
-    publicationStatus: "published",
-    visibility: "public",
-  });
-  for (const decision of ["PENDING", "NEEDS_HUMAN_REVIEW", "REJECTED"]) {
+test("publishes notes without changing or gating their AI verification decisions", () => {
+  for (const decision of [
+    "APPROVED",
+    "APPROVED_WITH_WARNING",
+    "PENDING",
+    "NEEDS_HUMAN_REVIEW",
+    "REJECTED",
+  ]) {
     assert.deepEqual(getNotePublicationFields(decision), {
-      publicationStatus: "private",
-      visibility: "private",
+      publicationStatus: "published",
+      visibility: "public",
     });
   }
 });

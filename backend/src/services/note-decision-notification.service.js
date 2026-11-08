@@ -8,13 +8,13 @@ function notificationText(note, studentName) {
       ? "Not calculated; human review is required."
       : `${note.mistakePercentage.toFixed(2)}%`;
   const messages = {
-    APPROVED: "Your notes have been approved.",
+    APPROVED: "AI verification did not find significant issues in your notes.",
     APPROVED_WITH_WARNING:
-      "Your notes have been approved with a warning. Please review the suggested corrections.",
+      "AI verification passed with warnings. Please review the suggested corrections.",
     REJECTED:
-      "Your notes were not approved. Review the report and upload a corrected version for another review.",
+      "AI verification flagged possible errors. Your notes remain public; review the report and optionally upload a corrected version.",
     NEEDS_HUMAN_REVIEW:
-      "Your notes need a human review. They remain private while awaiting review.",
+      "AI verification could not fully assess your notes. They remain public; review the detailed report.",
   };
 
   return [
@@ -48,7 +48,7 @@ export async function sendNoteDecisionEmail(noteId) {
     return await sendEmailSafely({
       id: `note-decision-${noteId}-${note.approvalDecision}`,
       to: student.email,
-      subject: `Note review result: ${note.title}`,
+      subject: `AI verification result: ${note.title}`,
       text: notificationText(note, student.fullName),
     });
   } catch (error) {

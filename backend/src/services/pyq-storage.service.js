@@ -64,17 +64,32 @@ export async function deletePyqFile(storageInfo) {
 export function getPyqFileUrl(storageInfo) {
   const storage = getCloudinary();
   const format = storageInfo.format ?? "pdf";
-  if ((storageInfo.accessType ?? "upload") === "authenticated") {
-    return storage.utils.private_download_url(storageInfo.publicId, format, {
-      resource_type: "raw",
-      type: "authenticated",
-      expires_at: Math.floor(Date.now() / 1000) + 300,
-    });
-  }
-  return storage.url(storageInfo.publicId, {
+  return storage.utils.private_download_url(storageInfo.publicId, format, {
     resource_type: "raw",
-    type: "upload",
-    secure: true,
-    format,
+    type: "authenticated",
+    expires_at: Math.floor(Date.now() / 1000) + 300,
   });
+}
+
+export async function secureLegacyPyqFile(storageInfo) {
+  if ((storageInfo.accessType ?? "upload") === "authenticated") return storageInfo;
+
+  const storage = getCloudinary();
+  const oldType = storageInfo.accessType ?? "upload";
+  const newPublicId = `${storageInfo.publicId}-secure-${randomUUID()}`;
+  const renamed = await storage.uploader.rename(
+    storageInfo.publicId,
+    newPublicId,
+    {
+      resource_type: "raw",
+      type: oldType,
+      to_type: "authenticated",
+      invalidate: true,
+    },
+  );
+  return {
+    ...storageInfo,
+    publicId: renamed.public_id,
+    accessType: "authenticated",
+  };
 }

@@ -13,16 +13,15 @@ import StudentResourceAccess from "../models/StudentResourceAccess.js";
 import { removeCommunityReportNotifications } from "./note-community.controller.js";
 import {
   deleteNoteFile,
+  deleteNotePreview,
   getNoteFormat,
-  getPrivateNoteDownloadUrl,
   uploadNoteFile,
+  uploadNotePreview,
   validateNoteFile,
 } from "../services/note-storage.service.js";
+import { renderPdfFirstPagePreview } from "../services/note-preview.service.js";
 import { decryptOcrResult } from "../services/note-ocr.service.js";
 import { decryptJson } from "../services/encrypted-json.service.js";
-import {
-  recordResourceAccess,
-} from "../services/student-library.service.js";
 import { createNotification } from "../services/notification.service.js";
 import { sendResourceUploadEmail } from "../services/email-notification.service.js";
 
@@ -113,7 +112,7 @@ function serializeNote(note, request) {
         }
       : null,
     createdAt: note.createdAt,
-    downloadUrl: `${request.baseUrl}/${noteId}/file`,
+    viewPath: `/search/resources/note/${noteId}/view`,
   };
 }
 
@@ -174,7 +173,7 @@ export async function createNote(request, response) {
 
   response.status(201).json({
     status: "success",
-    message: "Your note was uploaded and queued for AI verification. It is private until verified.",
+    message: "Your note is now public in Explore. OCR and AI verification are continuing in the background.",
     note: serializeNote(note, request),
   });
 }
@@ -191,21 +190,32 @@ async function createNoteSubmission({
 }) {
   const id = new mongoose.Types.ObjectId();
   let storedFile;
+  let previewStorage;
   let note;
   try {
     storedFile = await uploadNoteFile(file, format);
+    if (format === "pdf") {
+      try {
+        previewStorage = await uploadNotePreview(
+          await renderPdfFirstPagePreview(file.buffer),
+        );
+      } catch (previewError) {
+        console.error(`Could not generate preview for note ${id}.`, previewError);
+      }
+    }
     note = await Note.create({
       _id: id,
       ...fields,
       uploadedBy,
       storage: storedFile,
+      previewStorage,
       fileName: basename(file.originalname),
       revisionRoot: revisionRoot ?? id,
       revisionOf,
       revisionNumber,
       approvalDecision: "PENDING",
-      publicationStatus: "private",
-      visibility: "private",
+      publicationStatus: "published",
+      visibility: "public",
     });
     await createNotification({
       recipient: uploadedBy,
@@ -233,6 +243,13 @@ async function createNoteSubmission({
         await deleteNoteFile(storedFile);
       } catch (cleanupError) {
         console.error("Failed to clean up an incomplete note upload.", cleanupError);
+      }
+    }
+    if (previewStorage) {
+      try {
+        await deleteNotePreview(previewStorage);
+      } catch (cleanupError) {
+        console.error("Failed to clean up an incomplete note preview.", cleanupError);
       }
     }
     throw error;
@@ -267,21 +284,15 @@ export async function resubmitCorrectedNote(request, response) {
     error.statusCode = 404;
     throw error;
   }
-  if (parent.approvalDecision !== "REJECTED") {
-    const error = new Error("Only rejected notes can be resubmitted as corrected versions.");
-    error.statusCode = 409;
-    throw error;
-  }
-
   const rootId = parent.revisionRoot ?? parent._id;
   const latest = await Note.findOne({
     $or: [{ revisionRoot: rootId }, { _id: rootId }],
     uploadedBy: request.user._id,
   })
     .sort({ revisionNumber: -1 })
-    .select("_id approvalDecision revisionNumber");
+    .select("_id revisionNumber");
   if (latest && !latest._id.equals(parent._id)) {
-    const error = new Error("Resubmit the latest rejected version of this note.");
+    const error = new Error("Resubmit the latest version of this note.");
     error.statusCode = 409;
     throw error;
   }
@@ -335,7 +346,6 @@ export async function getPublishedNotes(request, response) {
     },
     publicationStatus: "published",
     visibility: { $in: ["public", null] },
-    approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
   };
   if (typeof request.query.subject === "string" && request.query.subject.trim()) {
     const subject = request.query.subject.trim();
@@ -403,33 +413,6 @@ export async function getPublishedNotes(request, response) {
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-export async function downloadMyNote(request, response) {
-  const note = await Note.findOne({
-    _id: request.params.noteId,
-    $or: [
-      { uploadedBy: request.user._id },
-      {
-        publicationStatus: "published",
-        visibility: { $in: ["public", null] },
-        approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
-      },
-    ],
-  });
-  if (!note) {
-    const error = new Error("Note not found.");
-    error.statusCode = 404;
-    throw error;
-  }
-
-  await recordResourceAccess({
-    userId: request.user._id,
-    resourceType: "note",
-    resourceId: note._id,
-    downloaded: true,
-  });
-  response.redirect(getPrivateNoteDownloadUrl(note.storage));
 }
 
 export async function getMyNoteOcr(request, response) {
@@ -600,7 +583,10 @@ export async function deleteMyNote(request, response) {
     throw error;
   }
 
-  await deleteNoteFile(note.storage);
+  await Promise.all([
+    deleteNoteFile(note.storage),
+    note.previewStorage ? deleteNotePreview(note.previewStorage) : Promise.resolve(),
+  ]);
   await Promise.all([
     NoteOcrJob.deleteOne({ note: note._id }),
     NoteOcrResult.deleteOne({ note: note._id }),

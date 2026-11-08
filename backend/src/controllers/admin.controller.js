@@ -2,21 +2,14 @@ import mongoose from "mongoose";
 import Contribution from "../models/Contribution.js";
 import Note from "../models/Note.js";
 import NoteCommunityReport from "../models/NoteCommunityReport.js";
-import { createNotification } from "../services/notification.service.js";
 import NoteOcrResult from "../models/NoteOcrResult.js";
 import NoteVerificationResult from "../models/NoteVerificationResult.js";
 import Pyq from "../models/Pyq.js";
 import PyqReport from "../models/PyqReport.js";
 import RewardAccount from "../models/RewardAccount.js";
 import User from "../models/User.js";
-import { getPrivateNoteDownloadUrl } from "../services/note-storage.service.js";
-import { getPyqFileUrl } from "../services/pyq-storage.service.js";
 import { decryptJson } from "../services/encrypted-json.service.js";
-import {
-  awardContribution,
-  getRewardBudget,
-} from "../services/reward.service.js";
-import { sendNoteDecisionEmail } from "../services/note-decision-notification.service.js";
+import { getRewardBudget } from "../services/reward.service.js";
 
 const maximumPage = 10000;
 const pageLimit = 25;
@@ -254,7 +247,7 @@ export async function listAdminNotes(request, response) {
             }
           : null,
         ocrPages: ocr ? decryptJson(ocr.encryptedResult).pages : [],
-        reviewUrl: getPrivateNoteDownloadUrl(note.storage),
+        viewPath: `/search/resources/note/${note._id}/view`,
       };
     }),
     pagination: {
@@ -262,127 +255,6 @@ export async function listAdminNotes(request, response) {
       limit: pageLimit,
       total,
       pages: Math.ceil(total / pageLimit),
-    },
-  });
-}
-
-export async function reviewAdminNote(request, response) {
-  if (!mongoose.isValidObjectId(request.params.noteId)) {
-    throw badRequest("Note ID is invalid.");
-  }
-  const decision = request.body?.decision;
-  if (!["APPROVED", "REJECTED"].includes(decision)) {
-    throw badRequest("Decision must be APPROVED or REJECTED.");
-  }
-  const reason =
-    typeof request.body?.reason === "string" ? request.body.reason.trim() : "";
-  if (!reason || reason.length > 2000) {
-    throw badRequest("A moderation reason of 1 to 2000 characters is required.");
-  }
-
-  const note = await Note.findOneAndUpdate(
-    {
-      _id: request.params.noteId,
-      verificationStatus: "completed",
-    },
-    {
-      $set: {
-        approvalDecision: decision,
-        publicationStatus: decision === "APPROVED" ? "published" : "private",
-        visibility: decision === "APPROVED" ? "public" : "private",
-        decisionSource: "admin",
-        moderatedBy: request.user._id,
-        moderatedAt: new Date(),
-        moderationReason: reason,
-        humanReviewReason: "",
-      },
-      $push: {
-        moderationHistory: {
-          actor: request.user._id,
-          decision,
-          reason,
-          createdAt: new Date(),
-        },
-      },
-    },
-    { new: true, runValidators: true },
-  );
-  if (!note) {
-    const error = new Error("Note was not found or AI verification has not completed.");
-    error.statusCode = 409;
-    throw error;
-  }
-
-  const emailSent = await sendNoteDecisionEmail(note._id);
-  const notificationMessage = emailSent
-    ? " The uploader was emailed."
-    : " The uploader email could not be delivered; administrator follow-up is required.";
-
-  let inAppNotificationMessage = "";
-  try {
-    const dedupeKey = `note-decision:admin:${note._id}:${note.moderatedAt.getTime()}`;
-    await createNotification({
-      recipient: note.uploadedBy,
-      type: decision === "APPROVED" ? "note_approved" : "note_rejected",
-      title: decision === "APPROVED" ? "Notes approved by an administrator" : "Notes rejected by an administrator",
-      message: decision === "APPROVED"
-        ? `"${note.title}" was manually approved and published.`
-        : `"${note.title}" was manually rejected. Review the report and upload a corrected version.`,
-      link: "/library",
-      dedupeKey,
-    });
-    if (decision === "REJECTED") {
-      await createNotification({
-        recipient: note.uploadedBy,
-        type: "corrections_required",
-        title: "Corrections required",
-        message: `Review the administrator's reason and verification findings for "${note.title}", then upload a corrected version. Your original notes remain unchanged.`,
-        link: "/library",
-        dedupeKey: `note-corrections:admin:${note._id}:${note.moderatedAt.getTime()}`,
-      });
-    }
-    inAppNotificationMessage = " An in-app notification was sent to the uploader.";
-  } catch (error) {
-    console.error(`Could not create in-app decision notification for note ${note._id}:`, error);
-    inAppNotificationMessage = " The in-app notification could not be created; administrator follow-up is required.";
-  }
-
-  let rewardMessage = "";
-  if (decision === "APPROVED") {
-    try {
-      const reward = await awardContribution({
-        userId: note.uploadedBy,
-        reviewerId: request.user._id,
-        type: "handwritten_note",
-        sourceType: "note",
-        sourceId: note._id,
-        title: note.title,
-        reason: "Administrator manually approved the note after reviewing its AI report and content.",
-      });
-      rewardMessage = reward.awarded
-        ? ` The uploader earned ${reward.points} contribution points.`
-        : reward.unfunded
-          ? " No points were distributed because the platform reward budget is exhausted."
-          : "";
-    } catch (error) {
-      console.error(`Could not reward manually approved note ${note._id}:`, error);
-      rewardMessage = " Reward distribution needs administrator follow-up.";
-    }
-  }
-
-  response.json({
-    status: "success",
-    message:
-      decision === "APPROVED"
-        ? `Note manually approved and published after admin review.${rewardMessage}${notificationMessage}${inAppNotificationMessage}`
-        : `Note manually rejected and kept private.${notificationMessage}${inAppNotificationMessage}`,
-    note: {
-      id: note._id.toString(),
-      decision: note.approvalDecision,
-      decisionSource: note.decisionSource,
-      publicationStatus: note.publicationStatus,
-      moderatedAt: note.moderatedAt,
-      moderationReason: note.moderationReason,
     },
   });
 }
@@ -514,7 +386,7 @@ export async function listAdminPyqReports(request, response) {
   const filter = status === "all" ? {} : { status };
   const [reports, total] = await Promise.all([
     PyqReport.find(filter)
-      .populate("pyq", "university college department course semester subject examinationYear examType approvalStatus storage")
+      .populate("pyq", "university college department course semester subject examinationYear examType fileName")
       .populate("reportedBy", "fullName email")
       .populate("reviewedBy", "fullName")
       .sort({ createdAt: -1, _id: -1 })
@@ -546,8 +418,7 @@ export async function listAdminPyqReports(request, response) {
             subject: report.pyq.subject,
             examinationYear: report.pyq.examinationYear,
             examType: report.pyq.examType,
-            approvalStatus: report.pyq.approvalStatus,
-            reviewUrl: getPyqFileUrl(report.pyq.storage),
+            viewPath: `/search/resources/pyq/${report.pyq._id}/view`,
           }
         : null,
     })),

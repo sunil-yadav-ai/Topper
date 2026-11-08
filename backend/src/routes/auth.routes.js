@@ -17,7 +17,17 @@ import {
 } from "../middleware/auth.middleware.js";
 
 const authRouter = Router();
-const authLimiter = rateLimit({
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    status: "error",
+    message: "Too many login attempts. Please try again later.",
+  },
+});
+const authActionLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 20,
   standardHeaders: "draft-8",
@@ -28,16 +38,15 @@ const authLimiter = rateLimit({
   },
 });
 
-authRouter.use(authLimiter);
-authRouter.post("/register", registerStudent);
-authRouter.post("/login", loginStudent);
-authRouter.post("/admin/login", loginAdmin);
+authRouter.post("/register", authActionLimiter, registerStudent);
+authRouter.post("/login", loginLimiter, loginStudent);
+authRouter.post("/admin/login", loginLimiter, loginAdmin);
 authRouter.get("/me", requireAuth, getCurrentUser);
 authRouter.post("/logout", logout);
-authRouter.post("/verify-email", verifyEmail);
-authRouter.post("/resend-verification", resendVerificationEmail);
-authRouter.post("/forgot-password", forgotPassword);
-authRouter.post("/reset-password", resetPassword);
+authRouter.post("/verify-email", authActionLimiter, verifyEmail);
+authRouter.post("/resend-verification", authActionLimiter, resendVerificationEmail);
+authRouter.post("/forgot-password", authActionLimiter, forgotPassword);
+authRouter.post("/reset-password", authActionLimiter, resetPassword);
 authRouter.get(
   "/admin",
   requireAuth,

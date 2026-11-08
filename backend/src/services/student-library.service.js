@@ -12,13 +12,11 @@ function badRequest(message) {
 }
 
 function publishedFilter(resourceType, resourceId) {
-  return resourceType === "note"
-    ? {
-        _id: resourceId,
-        publicationStatus: "published",
-        approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
-      }
-    : { _id: resourceId, approvalStatus: "approved" };
+  return {
+    _id: resourceId,
+    publicationStatus: "published",
+    visibility: { $in: ["public", null] },
+  };
 }
 
 function modelFor(resourceType) {
@@ -30,7 +28,8 @@ export async function migrateLegacyPyqBookmarks(userId) {
   if (!user?.savedPyqs?.length) return;
   const approvedIds = await Pyq.find({
     _id: { $in: user.savedPyqs },
-    approvalStatus: "approved",
+    publicationStatus: "published",
+    visibility: { $in: ["public", null] },
   }).distinct("_id");
   if (approvedIds.length) {
     await Bookmark.bulkWrite(
@@ -120,7 +119,7 @@ function serializeLibraryResource(resource, resourceType, bookmark) {
       college: resource.uploader?.college ?? "",
       batch: resource.uploader?.batch ?? "",
       fileFormat: resource.storage.format,
-      downloadUrl: `/search/notes/${resource._id}/download`,
+      viewPath: `/search/resources/note/${resource._id}/view`,
     };
   }
   return {
@@ -132,7 +131,7 @@ function serializeLibraryResource(resource, resourceType, bookmark) {
     examinationYear: resource.examinationYear,
     examType: resource.examType,
     fileFormat: resource.storage.format ?? "pdf",
-    downloadUrl: `/pyqs/${resource._id}/download`,
+    viewPath: `/search/resources/pyq/${resource._id}/view`,
   };
 }
 
@@ -148,13 +147,17 @@ async function findResources(resourceIds) {
       ? Note.find({
           _id: { $in: notes },
           publicationStatus: "published",
-          approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
+          visibility: { $in: ["public", null] },
         })
           .populate("uploadedBy", "university college batch")
           .lean()
       : [],
     pyqs.length
-      ? Pyq.find({ _id: { $in: pyqs }, approvalStatus: "approved" })
+      ? Pyq.find({
+          _id: { $in: pyqs },
+          publicationStatus: "published",
+          visibility: { $in: ["public", null] },
+        })
           .populate("uploadedBy", "batch")
           .lean()
       : [],

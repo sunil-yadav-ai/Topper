@@ -3,13 +3,12 @@ import test from "node:test";
 import Note from "../models/Note.js";
 import { getPublishedNotes } from "./note.controller.js";
 
-test("published note subject counts are limited to approved notes in the student's department", async () => {
+test("published note subject counts include all verification outcomes in the student's department", async () => {
   const originalAggregate = Note.aggregate;
   const filter = {
     department: { $regex: "^CSE$", $options: "i" },
     publicationStatus: "published",
     visibility: { $in: ["public", null] },
-    approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
   };
   Note.aggregate = async (pipeline) => {
     assert.deepEqual(pipeline[0], { $match: filter });
@@ -42,7 +41,6 @@ test("published notes include safe uploader details and support pagination", asy
     department: { $regex: "^CSE$", $options: "i" },
     publicationStatus: "published",
     visibility: { $in: ["public", null] },
-    approvalDecision: { $in: ["APPROVED", "APPROVED_WITH_WARNING"] },
     subject: { $regex: "^Computer Graphics$", $options: "i" },
   };
   const note = {

@@ -21,6 +21,13 @@ const app = express();
 
 app.use(
   cors({
+    exposedHeaders: [
+      "Accept-Ranges",
+      "Content-Length",
+      "Content-Range",
+      "X-Resource-Format",
+      "X-Resource-Name",
+    ],
     origin(origin, callback) {
       callback(null, !origin || isAllowedCorsOrigin(origin));
     },

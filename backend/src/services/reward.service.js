@@ -14,7 +14,7 @@ const contributionPolicies = {
   },
   pyq: {
     points: env.rewardPoints.pyq,
-    title: "Approved previous-year question paper",
+    title: "Published previous-year question paper",
   },
   verified_correction: {
     points: env.rewardPoints.verifiedCorrection,
