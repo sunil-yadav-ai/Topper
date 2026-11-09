@@ -179,7 +179,7 @@ export async function createNoteCommunityReport(request, response) {
       `Note: ${note.title}`,
       `Details: ${explanation}`,
       suggestedCorrection ? `Suggested correction: ${suggestedCorrection}` : "",
-      "Sign in to EduRise to review and respond.",
+      "Sign in to Topper to review and respond.",
     ]
       .filter(Boolean)
       .join("\n"),

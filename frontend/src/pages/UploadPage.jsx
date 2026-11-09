@@ -3,11 +3,9 @@ import { Link } from "react-router-dom";
 import { useGSAP } from "@gsap/react";
 import {
   ArrowUpRight,
-  CheckCircle2,
   FileText,
   ImagePlus,
   LoaderCircle,
-  UploadCloud,
   X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -17,6 +15,7 @@ import {
   resourceOptionsUpdatedEvent,
 } from "../lib/resource-options.js";
 import { gsap } from "../lib/gsap.js";
+import AnimatedIllustration from "../components/AnimatedIllustration.jsx";
 
 gsap.registerPlugin(useGSAP);
 
@@ -119,6 +118,13 @@ export default function UploadPage() {
     () => uniqueOptions([...options.universities, user?.university]),
     [options.universities, user?.university],
   );
+  const detailsComplete = resourceType === "note"
+    ? Object.values(noteForm).every((value) => String(value).trim())
+    : Object.values(pyqForm).every((value) => String(value).trim());
+  const resourceLabel = resourceType === "note" ? "Study notes" : "Question paper";
+  const summaryTitle = resourceType === "note"
+    ? noteForm.title || "Your notes title"
+    : [pyqForm.subject, pyqForm.course].filter(Boolean).join(" · ") || "Your question paper";
 
   useEffect(() => {
     let active = true;
@@ -159,14 +165,44 @@ export default function UploadPage() {
   }, [file]);
 
   useGSAP(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const targets = rootRef.current?.querySelectorAll("[data-upload-animate]");
     if (!targets?.length) return;
     gsap.fromTo(
       targets,
-      { autoAlpha: 0, y: 14 },
-      { autoAlpha: 1, y: 0, duration: 0.42, stagger: 0.06, ease: "power2.out" },
+      { autoAlpha: 0, y: window.matchMedia("(min-width: 900px)").matches ? 16 : 9 },
+      { autoAlpha: 1, y: 0, duration: 0.5, stagger: 0.065, ease: "power2.out" },
+    );
+    const formSections = rootRef.current.querySelectorAll(
+      ".ed-upload-section-heading, .ed-upload-fields, .ed-upload-file",
+    );
+    gsap.fromTo(
+      formSections,
+      { autoAlpha: 0, y: 8 },
+      { autoAlpha: 1, y: 0, duration: 0.4, delay: 0.1, stagger: 0.055, ease: "power2.out" },
     );
   }, { scope: rootRef, dependencies: [resourceType], revertOnUpdate: true });
+
+  useGSAP(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const success = rootRef.current?.querySelector(".ed-upload-success");
+    if (success) {
+      gsap.fromTo(
+        success,
+        { autoAlpha: 0, y: 10, scale: 0.98 },
+        { autoAlpha: 1, y: 0, scale: 1, duration: 0.48, ease: "back.out(1.25)" },
+      );
+    }
+    const dropzone = rootRef.current?.querySelector(".ed-upload-file");
+    if (dropzone) {
+      gsap.to(dropzone, {
+        scale: dragging ? 1.015 : 1,
+        duration: 0.24,
+        ease: "power2.out",
+        overwrite: "auto",
+      });
+    }
+  }, { scope: rootRef, dependencies: [dragging, notice], revertOnUpdate: true });
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -285,8 +321,20 @@ export default function UploadPage() {
           <h1>Pass your study resources forward.</h1>
           <p>Share clear, useful course material with students who are learning the same things.</p>
         </div>
-        <div aria-hidden="true" className="ed-upload-hero-art"><UploadCloud size={56} strokeWidth={1.5} /></div>
+        <div aria-hidden="true" className="ed-upload-hero-art"><AnimatedIllustration className="ed-upload-svg-art" variant="upload" size={62} /></div>
       </section>
+
+      <ol aria-label="Upload steps" className="ed-upload-steps" data-upload-animate>
+        <li className={detailsComplete ? "is-complete" : "is-current"}>
+          <span>01</span><div><strong>Add details</strong><small>Describe your resource</small></div>
+        </li>
+        <li className={`${file ? "is-complete" : ""}${!file && detailsComplete ? " is-current" : ""}`}>
+          <span>02</span><div><strong>Choose a file</strong><small>PDF or image, up to {resourceType === "note" ? "10" : "20"} MB</small></div>
+        </li>
+        <li className={detailsComplete && file ? "is-current" : ""}>
+          <span>03</span><div><strong>Share it</strong><small>We’ll review it before publishing</small></div>
+        </li>
+      </ol>
 
       <div className="ed-upload-layout">
         <section className="ed-upload-card" data-upload-animate>
@@ -308,6 +356,8 @@ export default function UploadPage() {
                 aria-selected={resourceType === "note"}
                 className={resourceType === "note" ? "is-selected" : ""}
                 disabled={uploading}
+                aria-controls="upload-panel"
+                id="upload-notes-tab"
                 onClick={() => changeResourceType("note")}
                 role="tab"
                 type="button"
@@ -318,6 +368,8 @@ export default function UploadPage() {
                 aria-selected={resourceType === "pyq"}
                 className={resourceType === "pyq" ? "is-selected" : ""}
                 disabled={uploading}
+                aria-controls="upload-panel"
+                id="upload-question-paper-tab"
                 onClick={() => changeResourceType("pyq")}
                 role="tab"
                 type="button"
@@ -331,12 +383,24 @@ export default function UploadPage() {
           {error && <p className="ed-upload-message ed-upload-error" role="alert">{error}</p>}
           {notice && (
             <div className="ed-upload-message ed-upload-success" role="status">
-              <p><CheckCircle2 aria-hidden="true" size={17} /> {notice}</p>
+              <p><AnimatedIllustration className="ed-upload-success-art" variant="success" size={28} /> {notice}</p>
               <Link to="/library">View your uploads →</Link>
             </div>
           )}
 
-          <form className="ed-upload-form" onSubmit={submitUpload}>
+          <form
+            aria-labelledby={resourceType === "note" ? "upload-notes-tab" : "upload-question-paper-tab"}
+            className="ed-upload-form"
+            id="upload-panel"
+            onSubmit={submitUpload}
+            role="tabpanel"
+          >
+            <div className="ed-upload-section-heading">
+              <span>01 / RESOURCE DETAILS</span>
+              <p>{resourceType === "note"
+                ? "Add a clear title and course details so classmates can find your notes."
+                : "Tell students which course and exam this paper belongs to."}</p>
+            </div>
             {resourceType === "note" ? (
               <div className="ed-upload-fields">
                 <Field label="Title" maxLength={200} name="title" onChange={updateField} placeholder="e.g. Computer Graphics Unit 1 Notes" required value={noteForm.title} />
@@ -372,30 +436,36 @@ export default function UploadPage() {
               </div>
             )}
 
-            <label
-              className={`ed-upload-file${dragging ? " is-dragging" : ""}${file ? " has-file" : ""}`}
-              onDragEnter={(event) => {
-                event.preventDefault();
-                setDragging(true);
-              }}
-              onDragLeave={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget)) setDragging(false);
-              }}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={handleDrop}
-            >
-              <input
-                accept={accept}
-                disabled={uploading}
-                onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
-                ref={fileInput}
-                required={!file}
-                type="file"
-              />
-              <UploadCloud aria-hidden="true" size={26} />
-              <span>{file ? file.name : "Drop a file here or choose one to upload"}</span>
-              <small>PDF, JPG, JPEG, PNG · up to {resourceType === "note" ? "10" : "20"} MB</small>
-            </label>
+            <div className="ed-upload-file-section">
+              <div className="ed-upload-section-heading">
+                <span>02 / RESOURCE FILE</span>
+                <p>Upload a readable scan or document. You can preview it before sharing.</p>
+              </div>
+              <label
+                className={`ed-upload-file${dragging ? " is-dragging" : ""}${file ? " has-file" : ""}`}
+                onDragEnter={(event) => {
+                  event.preventDefault();
+                  setDragging(true);
+                }}
+                onDragLeave={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) setDragging(false);
+                }}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={handleDrop}
+              >
+                <input
+                  accept={accept}
+                  disabled={uploading}
+                  onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
+                  ref={fileInput}
+                  required={!file}
+                  type="file"
+                />
+                <AnimatedIllustration className="ed-upload-file-art" variant="upload" size={42} />
+                <span>{file ? file.name : "Drop a file here or choose one to upload"}</span>
+                <small>PDF, JPG, JPEG, PNG · up to {resourceType === "note" ? "10" : "20"} MB</small>
+              </label>
+            </div>
 
             {file && previewUrl && (
               <div className="ed-upload-preview">
@@ -415,6 +485,7 @@ export default function UploadPage() {
 
             {uploading && (
               <div aria-live="polite" className="ed-upload-progress">
+                <AnimatedIllustration className="ed-upload-progress-art" variant="upload" size={28} />
                 <div><span style={{ width: `${progress}%` }} /></div>
                 <span>{progress >= 100 ? "Saving and processing…" : `Uploading ${progress}%`}</span>
               </div>
@@ -429,15 +500,40 @@ export default function UploadPage() {
         </section>
 
         <aside className="ed-upload-aside" data-upload-animate>
-          <span className="ed-upload-aside-icon"><FileText aria-hidden="true" size={20} /></span>
-          <h2>A little care goes a long way.</h2>
-          <p>Upload clear, relevant material and include enough detail for classmates to find it later.</p>
+          <div className="ed-upload-summary">
+            <span className="ed-upload-aside-icon"><FileText aria-hidden="true" size={20} /></span>
+            <span className="ed-upload-eyebrow">YOUR CONTRIBUTION</span>
+            <h2>{summaryTitle}</h2>
+            <p className="ed-upload-summary-description">
+              {resourceType === "note"
+                ? noteForm.description || "Your notes description will appear here."
+                : `${pyqForm.examType} examination · ${pyqForm.examinationYear}`}
+            </p>
+            <span className="ed-upload-summary-type">{resourceLabel}</span>
+            <dl>
+              <div><dt>Subject</dt><dd>{form.subject || "Add a subject"}</dd></div>
+              <div><dt>University</dt><dd>{form.university || "Add a university"}</dd></div>
+              {resourceType === "note" ? (
+                <div><dt>Maximum marks</dt><dd>{noteForm.marks || "Not specified"}</dd></div>
+              ) : (
+                <>
+                  <div><dt>Exam</dt><dd>{pyqForm.examType} · {pyqForm.examinationYear}</dd></div>
+                  <div><dt>Course</dt><dd>{pyqForm.course || "Add a course"}</dd></div>
+                </>
+              )}
+              <div><dt>File</dt><dd>{file ? file.name : "No file selected"}</dd></div>
+            </dl>
+          </div>
+          <div className="ed-upload-guidance">
+            <h2>A little care goes a long way.</h2>
+            <p>Upload clear, relevant material and include enough detail for classmates to find it later.</p>
           <ul>
             <li>Notes are checked before they are published.</li>
             <li>Question papers go through a review before they appear in Explore.</li>
             <li>Your uploads remain linked to your student account.</li>
           </ul>
           <Link to="/search">Explore shared resources <span aria-hidden="true">↗</span></Link>
+          </div>
         </aside>
       </div>
     </main>

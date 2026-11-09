@@ -1,11 +1,14 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import "lenis/dist/lenis.css";
 import Panel from "./components/Panel.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
 import { api } from "./lib/api.js";
 import ApplicationLayout from "./components/SiteChrome.jsx";
-import { PageLoader } from "./components/PageState.jsx";
+import {
+  BrandedSuspense,
+  useBrandedLoadingScreen,
+} from "./components/PageState.jsx";
 import AdminDashboardPage from "./pages/AdminDashboardPage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
 import AdvertisingDisclosurePage from "./pages/AdvertisingDisclosurePage.jsx";
@@ -47,9 +50,9 @@ export default function App() {
       <Route
         path="/"
         element={(
-          <Suspense fallback={<p className="grid min-h-screen place-items-center bg-[#fff9ec] font-bold text-[#171717]">Setting up your study space…</p>}>
+          <BrandedSuspense label="Setting up your learning space…">
             <EduRiseLanding />
-          </Suspense>
+          </BrandedSuspense>
         )}
       />
       <Route element={<ApplicationLayout />}>
@@ -59,9 +62,9 @@ export default function App() {
           path="/resources/:resourceType/:resourceId"
           element={(
             <AuthenticatedPage>
-              <Suspense fallback={<PageLoader label="Loading resource viewer…" />}>
+              <BrandedSuspense label="Opening your study resource…">
                 <ResourceViewerPage />
-              </Suspense>
+              </BrandedSuspense>
             </AuthenticatedPage>
           )}
         />
@@ -91,33 +94,45 @@ export default function App() {
 
 function ProtectedPage({ children, admin = false }) {
   const { user, loading, authError } = useAuth();
+  const loadingScreen = useBrandedLoadingScreen(loading, "Loading your account…");
 
   if (loading) {
-    return <PageLoader label="Loading your account…" />;
+    return loadingScreen;
   }
   if (authError) {
-    return <p className="ed-page-error grid min-h-screen place-items-center px-5 text-center" role="alert">{authError}</p>;
+    return (
+      <>
+        <p className="ed-page-error grid min-h-screen place-items-center px-5 text-center" role="alert">{authError}</p>
+        {loadingScreen}
+      </>
+    );
   }
   if (!user) {
-    return <Navigate to={admin ? "/admin/login" : "/login"} replace />;
+    return <><Navigate to={admin ? "/admin/login" : "/login"} replace />{loadingScreen}</>;
   }
   if ((admin && user.role !== "admin") || (!admin && user.role !== "user")) {
-    return <Navigate to={getPostLoginPath(user)} replace />;
+    return <><Navigate to={getPostLoginPath(user)} replace />{loadingScreen}</>;
   }
 
-  return children;
+  return <>{children}{loadingScreen}</>;
 }
 
 function AuthenticatedPage({ children }) {
   const { user, loading, authError } = useAuth();
+  const loadingScreen = useBrandedLoadingScreen(loading, "Loading your account…");
   if (loading) {
-    return <PageLoader label="Loading your account…" />;
+    return loadingScreen;
   }
   if (authError) {
-    return <p className="ed-page-error grid min-h-screen place-items-center px-5 text-center" role="alert">{authError}</p>;
+    return (
+      <>
+        <p className="ed-page-error grid min-h-screen place-items-center px-5 text-center" role="alert">{authError}</p>
+        {loadingScreen}
+      </>
+    );
   }
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <><Navigate to="/login" replace />{loadingScreen}</>;
   }
-  return children;
+  return <>{children}{loadingScreen}</>;
 }

@@ -80,17 +80,17 @@ database readiness. Use `npm run build` to build the frontend.
 ## Student dashboard data
 
 - `GET /api/dashboard` requires an authenticated student session and returns the
-  current MongoDB profile, contribution counts, saved approved resources, and
+  current MongoDB profile, contribution counts, saved resources, and
   recent activity. Counts are aggregated from `Resource` documents owned by
   that student; there are no seeded or placeholder statistics.
 - Resource records use `type` (`note`, `pyq`, or `other`), `status`
   (`pending`, `approved`, or `rejected`), `uploadedBy`, and `pointsAwarded`.
-  Contributor points count only points on approved resources. A future upload
+  Contributor points count only points on eligible contributions. A future upload
   and moderation workflow should create/update these resource records.
 - `PATCH /api/dashboard/profile` updates editable student profile fields.
   Profile pictures are currently stored as validated HTTP(S) image URLs.
 - `POST` and `DELETE /api/dashboard/saved-resources/:resourceId` save or remove
-  approved resource references. Profile edits and saved-resource changes are
+  published resource references. Profile edits and saved-resource changes are
   recorded in the MongoDB activity collection.
 
 ## Handwritten note uploads
@@ -101,17 +101,17 @@ database readiness. Use `npm run build` to build the frontend.
   to the student's profile.
 - `POST /api/notes` accepts multipart form data with a `file` field and the
   note metadata. `GET /api/notes` lists only the signed-in student's notes,
-  `GET /api/notes/:noteId/file` returns a short-lived private download, and
-  `DELETE /api/notes/:noteId` deletes only that student's note.
+  and `DELETE /api/notes/:noteId` deletes only that student's note. Published
+  files are viewed through the authenticated in-app resource viewer.
 - Files are signature-checked and stored as authenticated Cloudinary assets.
   After the resource is saved, the backend sends the uploader an email
   confirmation through Nodemailer. Email delivery failures are logged and do
   not undo or fail a successful upload.
-  Each upload creates a `Note` with private publication status and a
+  Each upload creates a publicly visible `Note` immediately and a
   `NoteVerificationJob` of type `ai_handwritten_note` in the durable queued
-  state. The note is not published by the upload flow. OCR completes before
-  the worker runs its separate academic verification service; only an
-  `APPROVED` or `APPROVED_WITH_WARNING` decision can publish the note.
+  state. OCR and academic verification run independently of publication; the
+  actual verification decision is retained and never changed to make the note
+  public.
 - A separate MongoDB-backed OCR worker splits PDFs into individual pages and
   sends each page (or each uploaded image) to the OpenAI Responses vision API.
   It stores each page number, transcription, formulas, readability,
@@ -140,9 +140,10 @@ database readiness. Use `npm run build` to build the frontend.
   statements; unreliable reviews and notes with fewer than
   `MIN_VERIFIABLE_STATEMENTS` are sent to `NEEDS_HUMAN_REVIEW`. No confidence
   score is used in the mistake-percentage calculation or approval thresholds.
-- Approved notes and notes approved with warnings are published after
-  verification. Rejected, pending, and human-review notes remain private.
-  Authenticated students can discover published notes at `GET /api/notes/published`.
+- OCR and AI verification outcomes do not gate publication. Authenticated
+  students can discover uploaded notes at `GET /api/notes/published`; failed
+  OCR or a negative AI result remains visible as an accurate status to the
+  uploader.
   Students receive a direct Nodemailer email decision after verification;
   email delivery failures are logged and do not undo the decision. Owners can
   resubmit a corrected file for a rejected note at
@@ -153,67 +154,73 @@ database readiness. Use `npm run build` to build the frontend.
 
 ## Previous year question papers
 
-- `/pyqs` provides public, free browsing, filtering by semester, subject,
-  and examination year, and direct PDF downloads. Uploading, bookmarking, and
+- `/pyqs` provides public, free browsing and filtering by semester, subject,
+  and examination year. Uploading, bookmarking, and
   reporting require an authenticated student session.
 - Students upload papers from `/upload` or `/pyqs` with university, college,
   department, course, semester, subject, examination year, exam type, title,
   description, and a PDF/JPG/JPEG/PNG file (maximum 20 MB). Files are
   signature-checked and stored as authenticated Cloudinary assets using the
   existing Cloudinary configuration. Each paper records its original uploader
-  and stays private until an administrator approves it. Approved downloads use
-  short-lived signed URLs; owners can access their submissions from My Library.
+  and is published immediately. Authenticated students view papers in-app;
+  permanent storage URLs are not returned by APIs.
 - After MongoDB saves a paper, the backend sends the uploader a confirmation
   email through Nodemailer. Email delivery failures do not undo or fail the
   successful upload.
 - The dedicated `/upload` form also accepts question-paper PDFs and images.
-  Students can review uploaded notes and PYQs, including private review status,
+  Students can review uploaded notes and PYQs, including OCR/AI status,
   in the **My uploads** section of `/library`.
-- The API includes `GET /api/pyqs`, `GET /api/pyqs/:pyqId/download`,
+- The API includes `GET /api/pyqs`,
   `POST /api/pyqs`, `GET /api/pyqs/bookmarks`,
   `POST`/`DELETE /api/pyqs/:pyqId/bookmark`, and
-  `POST /api/pyqs/:pyqId/reports`. Admins review uploads at
-  `GET /api/pyqs/review` and approve or reject them using
-  `PATCH /api/pyqs/:pyqId/approval`. Reports can flag incorrect or duplicate
-  approved papers. A student can submit one report per paper.
-- No payment or subscription is required to browse or download papers.
+  `POST /api/pyqs/:pyqId/reports`. Reports can flag incorrect or duplicate
+  published papers. A student can submit one report per paper.
+- No payment or subscription is required to browse papers.
 
 ## Academic resource search
 
-- `/search` searches published, AI-approved handwritten notes and approved
-  PYQs. Pending, rejected, and human-review notes are excluded; PYQs remain
-  private until approved by an administrator.
+- `/search` searches all published notes and PYQs, regardless of OCR or AI
+  verification outcomes.
 - Search supports subjects, topics, units, and full-text resource details,
   with filters for department, university, college, batch, semester, subject,
   unit, topic, and resource type. Suggestions are debounced in the interface;
   results support pagination and sorting by recent uploads or student helpful
   votes.
+- Search normalizes spacing and word forms, tolerates one-edit spelling errors
+  and partial words, and ranks exact, close, partial, then local semantic-alias
+  matches. Notes are indexed from their metadata and encrypted OCR transcript;
+  OCR stays encrypted at rest. Search candidates are retrieved through bounded
+  MongoDB n-gram queries, and no external AI call is made for search keystrokes.
 - `GET /api/search` accepts `q`, the academic filters, `resourceType` (`note`
   or `pyq`), `sort` (`recent` or `helpful`), `page`, and `limit`.
-  `GET /api/search/suggestions?q=...` returns approved subject, topic, unit,
+  `GET /api/search/suggestions?q=...` returns published subject, topic, unit,
   and title suggestions. Verified students can mark a resource helpful once
   with `POST /api/search/:resourceType/:resourceId/helpful`.
-- MongoDB text indexes cover note and PYQ content; compound indexes support
-  approved-resource filtering, academic facets, and recent/helpful ordering.
+- MongoDB indexes support published-resource filters, academic facets,
+  recent/helpful ordering, and fuzzy-search n-grams. Existing note OCR and
+  resource metadata are indexed in batches on database startup.
 
 ## AI syllabus analysis
 
 - Verified students can upload a PDF, JPG/JPEG, or PNG syllabus (up to 10 MB)
-  at `/syllabus`. PDFs are split into pages for backend vision OCR. Uploads
-  contain no more than 50 PDF pages.
-- The backend transcribes each page and organizes only source-listed content
-  into subjects, units, topics, and subtopics. OCR text and the outline are
-  encrypted in MongoDB with `OCR_ENCRYPTION_KEY`; records are accessible only
-  to the uploading student. The original syllabus file is not retained.
+  at `/syllabus`. PDFs are limited to 50 pages. Text-based PDF pages are
+  extracted directly; sparse, scanned, or image-containing pages and uploaded
+  images use the configured OpenAI vision model. Every page is accounted for.
+- The backend organizes source-listed course, semester, subjects, codes, unit
+  numbers, topics, and subtopics in bounded text chunks. OCR text and the
+  outline are encrypted in MongoDB with `OCR_ENCRYPTION_KEY`; records are
+  accessible only to the uploading student. The original syllabus file is not
+  retained. Exact duplicate uploads by the same student reuse their existing
+  analysis, while failed analyses may be retried.
 - Students can review, add, remove, and correct extracted outline entries.
   Students can regenerate the outline from the stored, encrypted OCR text or
-  copy/download the reviewed topics. Resource matching is not run until the
+  copy the reviewed topics. Resource matching is not run until the
   student saves corrections and confirms the syllabus.
-- Matching queries use only published AI-approved notes and administrator-
-  approved PYQs. Topic-specific note matches, missing topics, and subject-level
-  PYQs are returned from actual database records; no placeholder resources are
-  generated. PYQs are shown at subject level because they do not have verified
-  topic metadata.
+- Matching queries use published notes, including their encrypted OCR text,
+  and relevant PYQs. Fuzzy topic matching uses note titles, descriptions,
+  academic metadata, OCR text, and PYQ titles/descriptions. PYQs without
+  topic-specific metadata remain subject-level matches. Missing-topic states
+  come from actual database records; no placeholder resources are generated.
 - APIs under `/api/syllabus-analyses` provide upload, owner-scoped list/detail,
   correction, source-grounded regeneration, and confirmation/resource matching.
   Configure `OPENAI_API_KEY` and `OCR_ENCRYPTION_KEY`;
@@ -228,7 +235,7 @@ database readiness. Use `npm run build` to build the frontend.
   or duplicate content), explains the issue, and can suggest a correction.
 - `POST /api/notes/:noteId/reports` accepts `pageNumber`, `category`,
   `explanation`, and optional `suggestedCorrection`. Reports are accepted only
-  for published, AI-approved notes. A student cannot report their own note;
+  for published notes. A student cannot report their own note;
   repeat reports for the same page and category are prevented.
 - The original uploader receives an email notification and can respond from
   the dashboard. The reporting student and uploader can see the report and its
@@ -247,7 +254,7 @@ database readiness. Use `npm run build` to build the frontend.
 
 ## Student library
 
-- Verified students can save published notes and approved PYQs to
+- Verified students can save published notes and PYQs to
   `GET /api/library?section=saved`. Bookmarks use the `Bookmark` MongoDB model
   and can be organized into named folders; the default folder is `Saved`.
 - Create a bookmark with `POST /api/library/bookmarks` and JSON fields
@@ -256,10 +263,14 @@ database readiness. Use `npm run build` to build the frontend.
   `{ "folder": "..." }`. Remove it with
   `DELETE /api/library/bookmarks/:bookmarkId` or
   `DELETE /api/library/bookmarks/:resourceType/:resourceId`.
-- `/library` shows saved resources, recently accessed resources, and download
-  history. Access and download metadata is recorded per student and resource
-  in MongoDB when they open an approved note or PYQ. Removed or unpublished
+- `/library` shows saved and recently accessed resources. View metadata is
+  recorded per student and resource in MongoDB when they open a published
+  note or PYQ. Removed or unpublished
   resources no longer appear in library results.
+- `GET /api/search/resources/:resourceType/:resourceId/view` requires an
+  authenticated student or admin and streams the private storage asset through
+  the backend. The in-app PDF/image viewer has no download or print controls;
+  browser viewing cannot prevent screenshots or all copying.
 - Every resource remains free. The library adds no purchase, premium, or
   payment routes or gating.
 
@@ -271,15 +282,15 @@ database readiness. Use `npm run build` to build the frontend.
   `GET /api/rewards/leaderboard`; both require an authenticated student session.
   Student and admin history APIs accept a `page` query parameter for older
   transaction and contribution records.
-- Points are credited only after academic verification or moderation:
-  AI-approved handwritten notes, administrator-approved PYQs,
+- Points are credited after the applicable contribution event:
+  AI-approved handwritten notes, successfully uploaded and published PYQs,
   administrator-confirmed academic corrections (the report author receives
   credit), and optional administrator-designated high-quality resources.
   Reports about readability or duplicate content do not qualify as academic
   corrections. Ad clicks, impressions, downloads, bookmarks, and visits never
   earn points.
-- The default transparent schedule is 10 points per approved handwritten note,
-  8 per approved PYQ, 5 per confirmed correction, and 15 for a high-quality
+- The default transparent schedule is 10 points per AI-approved handwritten note,
+  8 per published PYQ, 5 per confirmed correction, and 15 for a high-quality
   resource bonus. Configure these values with the `REWARD_POINTS_*` variables.
   Admins can add or deduct up to 1,000 points per adjustment with a required
   reason; every change records its actor, reason, balance, and budget change.
@@ -288,11 +299,11 @@ database readiness. Use `npm run build` to build the frontend.
   atomic available-budget check; if the pool is exhausted, a contribution is
   recorded without points. Admin point deductions return points to the
   available pool. Admins can designate a high-quality bonus only for an
-  approved note or PYQ, with a recorded review reason.
+  published note or PYQ, with a recorded review reason.
 - Administrators can review the budget, contributions, and distribution
   history in the admin dashboard. API routes under `/api/rewards/admin`
   provide `GET /overview`, `POST /adjust` (student email, signed points, and
-  reason), and `POST /quality-bonus` (approved resource type/id and reason).
+  reason), and `POST /quality-bonus` (published resource type/id and reason).
   The `Contribution`, `RewardAccount`, `RewardBudget`, and
   `RewardTransaction` records preserve the contribution and point history.
 - Points do not unlock or purchase any resource. Notes and PYQs remain free;
@@ -325,7 +336,7 @@ backend/
     models/           User, resource, note, syllabus, rewards, verification, OCR, notification, and activity models
     routes/           Auth, dashboard, note, syllabus, rewards, and health API routes
     scripts/          Admin provisioning command
-    services/         Email, auth, private storage, OCR, approval, and academic review services
+    services/         Email, auth, secure storage, OCR, AI verification, and academic review services
     app.js            Express middleware and route setup
     server.js         Database connection and HTTP startup
   .env.example        Backend environment variable example

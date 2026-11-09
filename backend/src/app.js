@@ -16,6 +16,8 @@ import rewardsRouter from "./routes/rewards.routes.js";
 import adminRouter from "./routes/admin.routes.js";
 import notificationsRouter from "./routes/notifications.routes.js";
 import profileRouter from "./routes/profile.routes.js";
+import learningTutorRouter from "./routes/learning-tutor.routes.js";
+import learningActivityRouter from "./routes/learning-activity.routes.js";
 
 const app = express();
 
@@ -52,6 +54,8 @@ app.use("/api/rewards", rewardsRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/profiles", profileRouter);
+app.use("/api/learning-tutor", learningTutorRouter);
+app.use("/api/learning-activity", learningActivityRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
 

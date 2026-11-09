@@ -1,12 +1,13 @@
 import { Link } from "react-router-dom";
 import Panel from "../components/Panel.jsx";
+import TopperLogo from "../components/TopperLogo.jsx";
 
 export default function AdvertisingDisclosurePage() {
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-8 sm:px-8 sm:py-12">
       <div className="mx-auto max-w-3xl">
-        <Link className="text-xl font-extrabold tracking-tight text-ink" to="/">
-          Study<span className="text-brand">Share</span>
+        <Link aria-label="Topper home" className="inline-block" to="/">
+          <TopperLogo />
         </Link>
         <Panel className="mt-8 space-y-5">
           <div>
@@ -14,7 +15,7 @@ export default function AdvertisingDisclosurePage() {
             <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-ink">Advertising &amp; privacy</h1>
           </div>
           <p className="text-sm leading-6 text-slate-700">
-            StudyShare is free for students. On selected public pages, the platform may display clearly labeled advertisements from Google AdSense. Advertising revenue belongs to the website owner and is separate from the platform-funded contributor reward budget.
+            Topper is free for students. On selected public pages, the platform may display clearly labeled advertisements from Google AdSense. Advertising revenue belongs to the website owner and is separate from the platform-funded contributor reward budget.
           </p>
           <p className="text-sm leading-6 text-slate-700">
             Advertisements do not unlock resources, change academic content, or affect contributor points. Students are never asked to click or view ads, and ad activity is not rewarded.
@@ -36,7 +37,7 @@ export default function AdvertisingDisclosurePage() {
           <p className="rounded-xl bg-amber-50 p-4 text-sm leading-6 text-amber-900">
             Ad serving must remain disabled until the site owner has published a complete privacy policy and configured any consent mechanism required for the regions served, including a Google-certified CMP where required.
           </p>
-          <Link className="inline-block text-sm font-semibold text-brand hover:underline" to="/">Return to StudyShare</Link>
+          <Link className="inline-block text-sm font-semibold text-brand hover:underline" to="/">Return to Topper</Link>
         </Panel>
       </div>
     </main>

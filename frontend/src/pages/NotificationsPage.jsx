@@ -1,13 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import Panel from "../components/Panel.jsx";
 import { api } from "../lib/api.js";
+import { usePageMotion } from "../lib/usePageMotion.js";
+import AnimatedIllustration from "../components/AnimatedIllustration.jsx";
 
 function messageFrom(error) {
   return error.response?.data?.message ?? error.message ?? "Could not load notification history.";
 }
 
 export default function NotificationsPage() {
+  const rootRef = useRef(null);
   const [notifications, setNotifications] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [page, setPage] = useState(1);
@@ -35,6 +38,8 @@ export default function NotificationsPage() {
   useEffect(() => {
     loadHistory(page);
   }, [page]);
+
+  usePageMotion(rootRef, { dependencies: [loading, notifications.length, page] });
 
   async function markRead(notification) {
     if (notification.isRead) return;
@@ -85,13 +90,16 @@ export default function NotificationsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main className="min-h-screen bg-slate-50" ref={rootRef}>
       <section className="mx-auto max-w-5xl space-y-5 px-4 py-6 sm:px-8 sm:py-10">
-        <div className="relative flex flex-wrap items-end justify-between gap-3 overflow-hidden rounded-3xl bg-gradient-to-br from-ink via-[#253372] to-indigo-700 px-5 py-6 text-white shadow-[0_24px_70px_-35px_rgba(30,41,59,0.6)] sm:px-7 sm:py-8">
+        <div className="relative flex flex-wrap items-end justify-between gap-3 overflow-hidden rounded-3xl bg-gradient-to-br from-ink via-[#253372] to-indigo-700 px-5 py-6 text-white shadow-[0_24px_70px_-35px_rgba(30,41,59,0.6)] sm:px-7 sm:py-8" data-motion-intro>
           <div aria-hidden="true" className="pointer-events-none absolute -right-8 -top-20 size-52 rounded-full border-[28px] border-white/[0.06]" />
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-200">Your updates</p>
-            <h1 className="mt-1 text-3xl font-extrabold tracking-tight sm:text-4xl">Notification history</h1>
+            <div className="flex items-center gap-2">
+              <AnimatedIllustration className="ed-notification-art" variant="notification" size={34} />
+              <h1 className="mt-1 text-3xl font-extrabold tracking-tight sm:text-4xl">Notification history</h1>
+            </div>
             <p className="mt-2 text-sm text-indigo-100/85">{unreadCount} unread notification{unreadCount === 1 ? "" : "s"}.</p>
           </div>
           <button
@@ -109,7 +117,7 @@ export default function NotificationsPage() {
         ) : notifications.length ? (
           <div className="space-y-3">
             {notifications.map((notification) => (
-              <Panel className={`transition-shadow hover:shadow-md ${notification.isRead ? "" : "border-indigo-200 bg-indigo-50/40"}`} key={notification.id}>
+              <Panel className={`transition-shadow hover:shadow-md ${notification.isRead ? "" : "border-indigo-200 bg-indigo-50/40"}`} data-motion-stagger key={notification.id}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">

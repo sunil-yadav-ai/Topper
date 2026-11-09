@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useGSAP } from "@gsap/react";
 import AdUnit from "./AdUnit.jsx";
 import { AuthenticatedSiteHeader } from "./SiteChrome.jsx";
+import TopperLogo from "./TopperLogo.jsx";
 import NotificationBell from "./NotificationBell.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { getPostLoginPath } from "../lib/navigation.js";
@@ -66,15 +67,6 @@ function Reveal({ children, className = "", delay = 0 }) {
   );
 }
 
-function BrandMark({ inverse = false }) {
-  return (
-    <span className={`ed-brand ${inverse ? "ed-brand-inverse" : ""}`}>
-      <span aria-hidden="true" className="ed-brand-mark">e</span>
-      <span>edu<span>rise</span></span>
-    </span>
-  );
-}
-
 function Arrow({ diagonal = false }) {
   return <span aria-hidden="true" className="ed-arrow">{diagonal ? "↗" : "→"}</span>;
 }
@@ -91,7 +83,7 @@ function ButtonLink({ children, to, kind = "dark", className = "" }) {
 function Mascot({ className = "" }) {
   return (
     <svg
-      aria-label="EduRise's cheerful orange study buddy holding a notebook"
+      aria-label="Topper's cheerful orange study buddy holding a notebook"
       className={className}
       fill="none"
       role="img"
@@ -141,7 +133,7 @@ function Mascot({ className = "" }) {
 
 function HeroNotebook() {
   return (
-    <div aria-label="Illustration of the EduRise study mascot surrounded by notes and study supplies" className="ed-hero-art" role="img">
+    <div aria-label="Illustration of the Topper study mascot surrounded by notes and study supplies" className="ed-hero-art" role="img">
       <div aria-hidden="true" className="ed-orbit ed-orbit-one" />
       <div aria-hidden="true" className="ed-orbit ed-orbit-two" />
       <div className="ed-sticker ed-sticker-note"><span>little steps</span><strong>BIG IDEAS</strong><i>✳</i></div>
@@ -308,7 +300,7 @@ function SubjectVault() {
 
 function VerificationIllustration() {
   return (
-    <div aria-label="Illustration showing a notebook page being carefully checked by EduRise AI" className="ed-verification-art" role="img">
+    <div aria-label="Illustration showing a notebook page being carefully checked by Topper AI" className="ed-verification-art" role="img">
       <div aria-hidden="true" className="ed-verification-sun">✳</div>
       <div aria-hidden="true" className="ed-check-doodle">✓</div>
       <div className="ed-ai-tag"><span className="ed-ai-pulse" /> EDU AI · PAGE CHECK</div>
@@ -504,7 +496,7 @@ function HallOfFame() {
 
 function CtaMascot() {
   return (
-    <div aria-label="EduRise's mascot sharing an open notebook" className="ed-cta-mascot" role="img">
+    <div aria-label="Topper's mascot sharing an open notebook" className="ed-cta-mascot" role="img">
       <span className="ed-cta-star ed-cta-star-one">✳</span>
       <span className="ed-cta-star ed-cta-star-two">✦</span>
       <span className="ed-cta-note">YOU'VE GOT THIS!</span>
@@ -520,7 +512,7 @@ function EduRiseFooter({ apiStatus }) {
     ? contactEmail
     : "";
   const shareText = encodeURIComponent(
-    "Learn Together. Rise Together. Discover EduRise, a free student resource-sharing community.",
+    "Learn Together. Rise Together. Discover Topper, a free student resource-sharing community.",
   );
   return (
     <footer className="ed-footer" id="contact">
@@ -528,7 +520,7 @@ function EduRiseFooter({ apiStatus }) {
       <div className="ed-footer-inner">
         <div className="ed-footer-main">
           <div className="ed-footer-brand">
-            <Link aria-label="EduRise home" to="/"><BrandMark inverse /></Link>
+            <Link aria-label="Topper home" to="/"><TopperLogo inverse /></Link>
             <p>Learn Together.<br /><span>Rise Together.</span></p>
             <span className="ed-footer-free">FREE TO LEARN · FREE TO SHARE</span>
           </div>
@@ -536,19 +528,19 @@ function EduRiseFooter({ apiStatus }) {
             <div><h2>Explore</h2><Link to="/search">Knowledge vault</Link><Link to="/pyqs">Previous-year papers</Link><Link to="/syllabus">Syllabus explorer</Link></div>
             <div><h2>Join in</h2><Link to="/register">Share your notes</Link><Link to="/login">Student sign in</Link><Link to="/library">Your library</Link></div>
             <div><h2>About</h2><a href="#about">Our story</a><a href="#verification">Thoughtful verification</a><Link to="/terms">Terms &amp; conditions</Link></div>
-            <div><h2>Privacy</h2><Link to="/advertising">Privacy &amp; advertising details</Link>{validContactEmail ? <a href={`mailto:${validContactEmail}`}>Contact EduRise</a> : <span className="ed-footer-coming-soon">Contact details coming soon</span>}</div>
+            <div><h2>Privacy</h2><Link to="/advertising">Privacy &amp; advertising details</Link>{validContactEmail ? <a href={`mailto:${validContactEmail}`}>Contact Topper</a> : <span className="ed-footer-coming-soon">Contact details coming soon</span>}</div>
           </div>
           <div className="ed-footer-social">
             <span>PASS THE GOOD STUFF ON.</span>
-            <div aria-label="Share EduRise" className="ed-social-links">
-              <a aria-label="Share EduRise on LinkedIn" href={`https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`} rel="noreferrer" target="_blank">in</a>
-              <a aria-label="Share EduRise on X" href={`https://twitter.com/intent/tweet?text=${shareText}&url=${shareUrl}`} rel="noreferrer" target="_blank">𝕏</a>
-              <a aria-label="Share EduRise on WhatsApp" href={`https://wa.me/?text=${shareText}%20${shareUrl}`} rel="noreferrer" target="_blank">↗</a>
+            <div aria-label="Share Topper" className="ed-social-links">
+              <a aria-label="Share Topper on LinkedIn" href={`https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`} rel="noreferrer" target="_blank">in</a>
+              <a aria-label="Share Topper on X" href={`https://twitter.com/intent/tweet?text=${shareText}&url=${shareUrl}`} rel="noreferrer" target="_blank">𝕏</a>
+              <a aria-label="Share Topper on WhatsApp" href={`https://wa.me/?text=${shareText}%20${shareUrl}`} rel="noreferrer" target="_blank">↗</a>
             </div>
           </div>
         </div>
         <div className="ed-footer-bottom">
-          <span>© {new Date().getFullYear()} EduRise. Made for students, by students.</span>
+          <span>© {new Date().getFullYear()} Topper. Made for students, by students.</span>
           <span className="ed-api-status"><i />{apiStatus}</span>
           <a href="#top">Back to the top ↑</a>
         </div>
@@ -613,6 +605,26 @@ export default function EduRiseLanding() {
 
     if (!reducedMotion) {
       page.classList.add("ed-gsap-ready");
+      const marqueeTrack = page.querySelector(".ed-marquee-track");
+      if (marqueeTrack) {
+        const marqueeMotion = gsap.fromTo(
+          marqueeTrack,
+          { xPercent: 0 },
+          {
+            xPercent: -50,
+            duration: 26,
+            ease: "none",
+            repeat: -1,
+          },
+        );
+        ScrollTrigger.create({
+          trigger: page,
+          start: "top top",
+          end: "bottom bottom",
+          onUpdate: ({ direction }) => marqueeMotion.reversed(direction < 0),
+        });
+      }
+
       gsap.fromTo(
         hero.querySelector(".ed-hero-backdrop"),
         { clipPath: "inset(0 0 100% 0)" },
@@ -923,7 +935,7 @@ export default function EduRiseLanding() {
       </svg>
       {user ? <AuthenticatedSiteHeader user={user} /> : <header className="ed-header">
         <div className="ed-header-inner">
-          <Link aria-label="EduRise home" className="ed-logo-link" to="/"><BrandMark /></Link>
+          <Link aria-label="Topper home" className="ed-logo-link" to="/"><TopperLogo /></Link>
           <button
             aria-expanded={menuOpen}
             aria-label={menuOpen ? "Close navigation" : "Open navigation"}
@@ -937,7 +949,6 @@ export default function EduRiseLanding() {
             <a href="#explore" onClick={() => setMenuOpen(false)}>Explore</a>
             <a href="#verification" onClick={() => setMenuOpen(false)}>How we check</a>
             <a href="#contributors" onClick={() => setMenuOpen(false)}>Our people</a>
-            <Link to="/pyqs" onClick={() => setMenuOpen(false)}>Free PYQs</Link>
             {user?.username && (
               <Link to={`/profile/${encodeURIComponent(user.username)}`} onClick={() => setMenuOpen(false)}>
                 My profile
@@ -964,7 +975,7 @@ export default function EduRiseLanding() {
               <span className="ed-word-mask ed-rise-mask"><span className="ed-hero-word ed-hero-rise">RISE</span></span>{" "}
               <span className="ed-word-mask"><span className="ed-hero-word">TOGETHER<span className="ed-hero-period">.</span></span></span>
             </h1>
-            <p>Your notes can help someone learn. Discover, share and grow with <b>EduRise.</b></p>
+            <p>Your notes can help someone learn. Discover, share and grow with <b>Topper.</b></p>
             <div className="ed-hero-actions">
               <ButtonLink className="ed-hero-primary" to="/search" kind="dark">Explore resources</ButtonLink>
               <ButtonLink className="ed-hero-secondary" to={user ? "/uploads" : "/register"} kind="paper">Share your notes</ButtonLink>
@@ -979,7 +990,7 @@ export default function EduRiseLanding() {
           </Reveal>
         </div>
         <a className="ed-hero-scroll" href="#explore"><span>SCROLL TO EXPLORE</span><i>↓</i></a>
-        <span aria-hidden="true" className="ed-hero-edge">EDURISE · LEARN TOGETHER · RISE TOGETHER ·</span>
+        <span aria-hidden="true" className="ed-hero-edge">TOPPER · LEARN TOGETHER · RISE TOGETHER ·</span>
       </section>
 
       <div className="ed-marquee" aria-label="A good note can change everything">
@@ -1020,7 +1031,7 @@ export default function EduRiseLanding() {
             <p>One upload can make somebody else’s hard chapter click.</p>
             <div className="ed-hero-actions">
               <ButtonLink className="ed-cta-dark" to={accountPath} kind="dark">
-                {user?.role === "admin" ? "Admin dashboard" : user ? "My profile" : "Join EduRise"}
+                {user?.role === "admin" ? "Admin dashboard" : user ? "My profile" : "Join Topper"}
               </ButtonLink>
               <ButtonLink className="ed-cta-paper" to="/search" kind="paper">Explore resources</ButtonLink>
             </div>

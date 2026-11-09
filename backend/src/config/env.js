@@ -33,6 +33,10 @@ export const env = {
     process.env.OPENAI_SYLLABUS_MODEL ??
     process.env.OPENAI_OCR_MODEL ??
     "gpt-4.1-mini",
+  openAiTutorModel:
+    process.env.OPENAI_TUTOR_MODEL ??
+    process.env.OPENAI_OCR_MODEL ??
+    "gpt-4.1-mini",
   openAiVerificationModel:
     process.env.OPENAI_VERIFICATION_MODEL ?? "gpt-4.1-mini",
   academicReferenceDomains: (process.env.ACADEMIC_REFERENCE_DOMAINS ??

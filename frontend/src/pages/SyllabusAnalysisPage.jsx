@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Copy, RefreshCw } from "lucide-react";
 import Panel from "../components/Panel.jsx";
 import { api } from "../lib/api.js";
+import { usePageMotion } from "../lib/usePageMotion.js";
 
 const emptyStructure = { subjects: [] };
 
@@ -10,17 +11,40 @@ function errorText(error) {
   return error.response?.data?.message ?? error.message ?? "Syllabus analysis failed.";
 }
 
+function normalizeClientStructure(value = emptyStructure) {
+  return {
+    course: value.course ?? null,
+    semester: value.semester ?? null,
+    subjects: (value.subjects ?? []).map((subject) => ({
+      subjectName: subject.subjectName ?? subject.name ?? "",
+      subjectCode: subject.subjectCode ?? null,
+      units: (subject.units ?? []).map((unit) => ({
+        unitNumber: unit.unitNumber ?? null,
+        unitTitle: unit.unitTitle ?? unit.name ?? "",
+        topics: (unit.topics ?? []).map((topic) => ({
+          topicName: topic.topicName ?? topic.name ?? "",
+          subtopics: topic.subtopics ?? [],
+        })),
+      })),
+    })),
+  };
+}
+
 function formatOutline(structure) {
-  return structure.subjects.map((subject) => [
-    subject.name,
-    ...subject.units.map((unit) => [
-      `  ${unit.name}`,
-      ...unit.topics.flatMap((topic) => [
-        `    - ${topic.name}`,
-        ...topic.subtopics.map((subtopic) => `      • ${subtopic}`),
-      ]),
+  return [
+    `Course: ${structure.course ?? "Not specified"}`,
+    `Semester: ${structure.semester ?? "Not specified"}`,
+    ...structure.subjects.map((subject) => [
+      `${subject.subjectName}${subject.subjectCode ? ` (${subject.subjectCode})` : ""}`,
+      ...subject.units.map((unit) => [
+        `  ${unit.unitNumber ? `Unit ${unit.unitNumber}: ` : ""}${unit.unitTitle}`,
+        ...unit.topics.flatMap((topic) => [
+          `    - ${topic.topicName}`,
+          ...topic.subtopics.map((subtopic) => `      • ${subtopic}`),
+        ]),
+      ].join("\n")),
     ].join("\n")),
-  ].join("\n")).join("\n\n");
+  ].join("\n\n");
 }
 
 function ResourceCard({ resource }) {
@@ -48,6 +72,7 @@ function ResourceCard({ resource }) {
 }
 
 export default function SyllabusAnalysisPage() {
+  const rootRef = useRef(null);
   const [analyses, setAnalyses] = useState([]);
   const [analysis, setAnalysis] = useState(null);
   const [structure, setStructure] = useState(emptyStructure);
@@ -55,6 +80,7 @@ export default function SyllabusAnalysisPage() {
   const [uploadProgress, setUploadProgress] = useState(null);
   const [busy, setBusy] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [reviewedPartialPages, setReviewedPartialPages] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -66,8 +92,9 @@ export default function SyllabusAnalysisPage() {
 
   function applyAnalysis(nextAnalysis) {
     setAnalysis(nextAnalysis);
-    setStructure(nextAnalysis.structure ?? emptyStructure);
+    setStructure(normalizeClientStructure(nextAnalysis.structure));
     setDirty(false);
+    setReviewedPartialPages(false);
     setError("");
     setNotice("");
   }
@@ -137,21 +164,49 @@ export default function SyllabusAnalysisPage() {
 
   function editSubject(subjectIndex, name) {
     updateStructure((value) => {
-      value.subjects[subjectIndex].name = name;
+      value.subjects[subjectIndex].subjectName = name;
+      return value;
+    });
+  }
+
+  function editCourse(course) {
+    updateStructure((value) => {
+      value.course = course;
+      return value;
+    });
+  }
+
+  function editSemester(semester) {
+    updateStructure((value) => {
+      value.semester = semester;
+      return value;
+    });
+  }
+
+  function editSubjectCode(subjectIndex, subjectCode) {
+    updateStructure((value) => {
+      value.subjects[subjectIndex].subjectCode = subjectCode;
       return value;
     });
   }
 
   function editUnit(subjectIndex, unitIndex, name) {
     updateStructure((value) => {
-      value.subjects[subjectIndex].units[unitIndex].name = name;
+      value.subjects[subjectIndex].units[unitIndex].unitTitle = name;
+      return value;
+    });
+  }
+
+  function editUnitNumber(subjectIndex, unitIndex, unitNumber) {
+    updateStructure((value) => {
+      value.subjects[subjectIndex].units[unitIndex].unitNumber = unitNumber;
       return value;
     });
   }
 
   function editTopic(subjectIndex, unitIndex, topicIndex, name) {
     updateStructure((value) => {
-      value.subjects[subjectIndex].units[unitIndex].topics[topicIndex].name = name;
+      value.subjects[subjectIndex].units[unitIndex].topics[topicIndex].topicName = name;
       return value;
     });
   }
@@ -184,12 +239,17 @@ export default function SyllabusAnalysisPage() {
   }
 
   async function confirmSyllabus() {
-    if (!analysis || dirty) return;
+    const hasPartialPages = analysis?.pages?.some(
+      (page) => page.readabilityStatus === "partially_readable",
+    );
+    if (!analysis || dirty || (hasPartialPages && !reviewedPartialPages)) return;
     setBusy("matching");
     setError("");
     setNotice("");
     try {
-      const { data } = await api.post(`/syllabus-analyses/${analysis.id}/confirm`);
+      const { data } = await api.post(`/syllabus-analyses/${analysis.id}/confirm`, {
+        reviewedPartialPages,
+      });
       applyAnalysis(data.analysis);
       setAnalyses((current) => current.map((item) =>
         item.id === data.analysis.id ? data.analysis : item,
@@ -231,10 +291,18 @@ export default function SyllabusAnalysisPage() {
     }
   }
 
+  const hasPartialPages = analysis?.pages?.some(
+    (page) => page.readabilityStatus === "partially_readable",
+  );
+
+  usePageMotion(rootRef, {
+    dependencies: [analysis?.id, analyses.length, busy, structure.subjects.length],
+  });
+
   return (
-    <main className="ed-syllabus-page">
+    <main className="ed-syllabus-page" ref={rootRef}>
       <section className="mx-auto max-w-7xl space-y-5 px-4 py-6 sm:space-y-6 sm:px-8 sm:py-10">
-        <div className="rounded-3xl border border-indigo-100 bg-gradient-to-br from-white via-white to-indigo-50 px-5 py-7 shadow-sm sm:px-8 sm:py-9">
+        <div className="rounded-3xl border border-indigo-100 bg-gradient-to-br from-white via-white to-indigo-50 px-5 py-7 shadow-sm sm:px-8 sm:py-9" data-motion-intro>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand sm:text-sm">Study from your curriculum</p>
           <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Syllabus analysis</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base">
@@ -248,7 +316,7 @@ export default function SyllabusAnalysisPage() {
 
         <div className="grid min-w-0 items-start gap-5 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-6">
           <aside className="min-w-0 space-y-5 sm:space-y-6">
-            <Panel>
+            <Panel data-motion-scroll>
               <h2 className="text-lg font-bold text-ink">Upload syllabus</h2>
               <p className="mt-1 text-sm text-slate-600">PDF, JPG, JPEG, or PNG · up to 10 MB</p>
               <form className="mt-4 space-y-4" onSubmit={uploadSyllabus}>
@@ -281,12 +349,12 @@ export default function SyllabusAnalysisPage() {
               </form>
             </Panel>
 
-            <Panel>
+            <Panel data-motion-scroll>
               <h2 className="text-lg font-bold text-ink">Your analyses</h2>
               {analyses.length ? (
                 <ul className="mt-3 space-y-2">
                   {analyses.map((item) => (
-                    <li key={item.id}>
+                    <li data-motion-stagger key={item.id}>
                       <button
                         className={`w-full min-w-0 rounded-xl border p-3 text-left transition ${analysis?.id === item.id ? "border-indigo-300 bg-indigo-50 shadow-sm" : "border-slate-200 hover:bg-slate-50"}`}
                         disabled={Boolean(busy)}
@@ -310,7 +378,7 @@ export default function SyllabusAnalysisPage() {
           <div className="min-w-0 space-y-5 sm:space-y-6">
             {analysis ? (
               <>
-                <Panel>
+                <Panel data-motion-scroll>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h2 className="break-all text-xl font-bold text-ink">{analysis.fileName}</h2>
@@ -337,7 +405,7 @@ export default function SyllabusAnalysisPage() {
                         </button>
                         <button
                           className="rounded-xl bg-brand px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
-                          disabled={dirty || Boolean(busy)}
+                          disabled={dirty || Boolean(busy) || (hasPartialPages && !reviewedPartialPages)}
                           onClick={confirmSyllabus}
                           type="button"
                         >
@@ -365,9 +433,24 @@ export default function SyllabusAnalysisPage() {
                     )}
                   </div>
                   {analysis.status === "review" && (
-                    <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-                      Check the extracted outline. AI extraction can miss or misread text; edits are saved before any resource search.
-                    </p>
+                    <div className="mt-3 space-y-3">
+                      <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+                        Check the extracted outline. AI extraction can miss or misread text; edits are saved before any resource search.
+                      </p>
+                      {hasPartialPages && (
+                        <label className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-sm text-amber-950">
+                          <input
+                            checked={reviewedPartialPages}
+                            className="mt-1"
+                            onChange={(event) => setReviewedPartialPages(event.target.checked)}
+                            type="checkbox"
+                          />
+                          <span>
+                            I reviewed the source text for partially readable pages and corrected any missing syllabus content above.
+                          </span>
+                        </label>
+                      )}
+                    </div>
                   )}
                   {analysis.status === "failed" && (
                     <p className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{analysis.processingError}</p>
@@ -379,14 +462,47 @@ export default function SyllabusAnalysisPage() {
                   )}
                   {analysis.status === "review" ? (
                       <fieldset disabled={Boolean(busy)} className="mt-5 min-w-0 space-y-5">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="text-sm font-semibold text-slate-700">
+                          Course / program
+                          <input
+                            className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 font-normal"
+                            onChange={(event) => editCourse(event.target.value)}
+                            value={structure.course ?? ""}
+                          />
+                        </label>
+                        <label className="text-sm font-semibold text-slate-700">
+                          Semester
+                          <input
+                            className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 font-normal"
+                            min="1"
+                            max="12"
+                            onChange={(event) => editSemester(event.target.value)}
+                            type="number"
+                            value={structure.semester ?? ""}
+                          />
+                        </label>
+                      </div>
                       {structure.subjects.map((subject, subjectIndex) => (
+                        <details className="min-w-0 rounded-xl border border-indigo-100 bg-white shadow-sm" key={`subject-${subjectIndex}`} open>
+                          <summary className="cursor-pointer px-4 py-3 font-semibold text-ink">
+                            {subject.subjectName || `Subject ${subjectIndex + 1}`}
+                            {subject.subjectCode ? ` · ${subject.subjectCode}` : ""}
+                          </summary>
                         <section className="min-w-0 rounded-xl border border-indigo-100 bg-white p-3 shadow-sm sm:p-4" key={`subject-${subjectIndex}`}>
                           <div className="flex items-center gap-2">
                             <input
                               aria-label="Subject name"
                               className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 font-bold text-ink"
                               onChange={(event) => editSubject(subjectIndex, event.target.value)}
-                              value={subject.name}
+                              value={subject.subjectName}
+                            />
+                            <input
+                              aria-label="Subject code"
+                              className="w-36 min-w-0 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                              onChange={(event) => editSubjectCode(subjectIndex, event.target.value)}
+                              placeholder="Subject code"
+                              value={subject.subjectCode ?? ""}
                             />
                             <button
                               aria-label="Remove subject"
@@ -402,13 +518,26 @@ export default function SyllabusAnalysisPage() {
                           </div>
                           <div className="mt-4 space-y-4">
                             {subject.units.map((unit, unitIndex) => (
-                              <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50 p-3 sm:p-4" key={`unit-${unitIndex}`}>
+                              <details className="min-w-0 rounded-xl border border-slate-100 bg-slate-50 p-3 sm:p-4" key={`unit-${unitIndex}`} open>
+                                <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+                                  {unit.unitNumber ? `Unit ${unit.unitNumber}: ` : "Unit: "}{unit.unitTitle || "Untitled"}
+                                </summary>
+                                <div className="mt-3">
                                 <div className="flex items-center gap-2">
+                                  <input
+                                    aria-label="Unit number"
+                                    className="w-24 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                                    min="1"
+                                    onChange={(event) => editUnitNumber(subjectIndex, unitIndex, event.target.value)}
+                                    placeholder="Number"
+                                    type="number"
+                                    value={unit.unitNumber ?? ""}
+                                  />
                                   <input
                                     aria-label="Unit name"
                                     className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold"
                                     onChange={(event) => editUnit(subjectIndex, unitIndex, event.target.value)}
-                                    value={unit.name}
+                                    value={unit.unitTitle}
                                   />
                                   <button
                                     className="text-xs font-semibold text-rose-700"
@@ -429,7 +558,7 @@ export default function SyllabusAnalysisPage() {
                                           aria-label="Topic name"
                                           className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm"
                                           onChange={(event) => editTopic(subjectIndex, unitIndex, topicIndex, event.target.value)}
-                                          value={topic.name}
+                                          value={topic.topicName}
                                         />
                                         <button
                                           className="text-xs font-semibold text-rose-700"
@@ -476,13 +605,13 @@ export default function SyllabusAnalysisPage() {
                                           + Add subtopic
                                         </button>
                                       </div>
-                                    </div>
+                                      </div>
                                   ))}
                                   <button
                                     className="text-sm font-semibold text-brand"
                                     onClick={() => updateStructure((value) => {
                                       value.subjects[subjectIndex].units[unitIndex].topics.push({
-                                        name: "",
+                                        topicName: "",
                                         subtopics: [],
                                       });
                                       return value;
@@ -493,11 +622,16 @@ export default function SyllabusAnalysisPage() {
                                   </button>
                                 </div>
                               </div>
+                              </details>
                             ))}
                             <button
                               className="text-sm font-semibold text-brand"
                               onClick={() => updateStructure((value) => {
-                                value.subjects[subjectIndex].units.push({ name: "", topics: [] });
+                                value.subjects[subjectIndex].units.push({
+                                  unitNumber: null,
+                                  unitTitle: "",
+                                  topics: [],
+                                });
                                 return value;
                               })}
                               type="button"
@@ -506,11 +640,16 @@ export default function SyllabusAnalysisPage() {
                             </button>
                           </div>
                         </section>
+                        </details>
                       ))}
                       <button
                         className="rounded-xl border border-dashed border-indigo-300 px-4 py-3 text-sm font-bold text-brand hover:bg-indigo-50"
                         onClick={() => updateStructure((value) => {
-                          value.subjects.push({ name: "", units: [] });
+                          value.subjects.push({
+                            subjectName: "",
+                            subjectCode: null,
+                            units: [],
+                          });
                           return value;
                         })}
                         type="button"
@@ -520,27 +659,36 @@ export default function SyllabusAnalysisPage() {
                     </fieldset>
                   ) : (
                     <div className="mt-5 space-y-4">
+                      <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+                        Course: <strong>{structure.course || "Not specified"}</strong>
+                        <span className="px-2">·</span>
+                        Semester: <strong>{structure.semester || "Not specified"}</strong>
+                      </p>
                       {structure.subjects.map((subject, subjectIndex) => (
-                        <div className="rounded-xl border border-slate-200 p-4" key={`${subject.name}-${subjectIndex}`}>
-                          <h3 className="text-lg font-bold text-ink">{subject.name}</h3>
+                        <details className="rounded-xl border border-slate-200 p-4" key={`${subject.subjectName}-${subjectIndex}`} open>
+                          <summary className="cursor-pointer text-lg font-bold text-ink">
+                            {subject.subjectName}{subject.subjectCode ? ` · ${subject.subjectCode}` : ""}
+                          </summary>
                           <div className="mt-3 space-y-3">
                             {subject.units.map((unit, unitIndex) => (
-                              <div key={`${unit.name}-${unitIndex}`}>
-                                <h4 className="font-semibold text-slate-700">{unit.name}</h4>
+                              <details key={`${unit.unitTitle}-${unitIndex}`} open>
+                                <summary className="cursor-pointer font-semibold text-slate-700">
+                                  {unit.unitNumber ? `Unit ${unit.unitNumber}: ` : ""}{unit.unitTitle}
+                                </summary>
                                 <ul className="mt-1 space-y-2">
                                   {unit.topics.map((topic, topicIndex) => (
-                                    <li className="text-sm text-slate-700" key={`${topic.name}-${topicIndex}`}>
-                                      <span className="font-medium">{topic.name}</span>
+                                    <li className="text-sm text-slate-700" key={`${topic.topicName}-${topicIndex}`}>
+                                      <span className="font-medium">{topic.topicName}</span>
                                       {topic.subtopics.length > 0 && (
                                         <span className="text-slate-500"> — {topic.subtopics.join(", ")}</span>
                                       )}
                                     </li>
                                   ))}
                                 </ul>
-                              </div>
+                              </details>
                             ))}
                           </div>
-                        </div>
+                        </details>
                       ))}
                     </div>
                   )}
@@ -566,7 +714,7 @@ export default function SyllabusAnalysisPage() {
                 )}
               </>
             ) : (
-              <Panel className="grid min-h-64 place-items-center text-center">
+              <Panel className="grid min-h-64 place-items-center text-center" data-motion-scroll>
                 <div>
                   <h2 className="text-lg font-bold text-ink">Your syllabus outline will appear here</h2>
                   <p className="mt-2 max-w-md text-sm text-slate-600">
@@ -617,7 +765,7 @@ function ResourceResults({ resources }) {
       </Panel>
 
       {resources.subjects.map((subject, subjectIndex) => (
-        <Panel key={`${subject.subject}-${subjectIndex}`}>
+        <Panel data-motion-stagger key={`${subject.subject}-${subjectIndex}`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-xl font-bold text-ink">{subject.subject}</h2>
             <div className="flex gap-2 text-xs font-semibold">
@@ -630,13 +778,16 @@ function ResourceResults({ resources }) {
               <section key={`${unit.name}-${unitIndex}`}>
                 <h3 className="font-bold text-slate-800">{unit.name}</h3>
                 {unit.topics.map((topic, topicIndex) => (
-                  <div className="mt-3 rounded-xl bg-slate-50 p-4" key={`${topic.name}-${topicIndex}`}>
-                    <h4 className="font-semibold text-ink">{topic.name}</h4>
+                  <details className="mt-3 rounded-xl bg-slate-50 p-4" key={`${topic.name}-${topicIndex}`}>
+                    <summary className="cursor-pointer font-semibold text-ink">
+                      {topic.name} <span className="ml-1 text-xs font-medium text-brand">Find resources</span>
+                    </summary>
                     {topic.subtopics.length > 0 && (
-                      <p className="mt-1 text-sm text-slate-500">{topic.subtopics.join(", ")}</p>
+                      <p className="mt-2 text-sm text-slate-500">{topic.subtopics.join(", ")}</p>
                     )}
                     {topic.notes.length ? (
                       <div className="mt-3 space-y-2">
+                        <h4 className="text-sm font-bold text-slate-700">Matching notes</h4>
                         {topic.notes.map((note) => <ResourceCard key={note.id} resource={note} />)}
                       </div>
                     ) : (
@@ -646,14 +797,23 @@ function ResourceResults({ resources }) {
                           : "No match in the most recent subject notes; older resources may match."}
                       </p>
                     )}
-                  </div>
+                    {topic.pyqs?.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <h4 className="text-sm font-bold text-slate-700">Matching question papers</h4>
+                        {topic.pyqs.map((pyq) => <ResourceCard key={pyq.id} resource={pyq} />)}
+                      </div>
+                    )}
+                    {!topic.notes.length && !topic.pyqs?.length && (
+                      <p className="mt-2 text-sm text-slate-600">No matching question papers are currently available.</p>
+                    )}
+                  </details>
                 ))}
               </section>
             ))}
           </div>
           {subject.notes.length > 0 && (
             <section className="mt-6 border-t border-slate-200 pt-5">
-              <h3 className="font-bold text-ink">Approved notes for this subject</h3>
+              <h3 className="font-bold text-ink">Notes matched to this syllabus</h3>
               <div className="mt-3 space-y-2">
                 {subject.notes.map((note) => <ResourceCard key={note.id} resource={note} />)}
               </div>

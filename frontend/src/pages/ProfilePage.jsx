@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useGSAP } from "@gsap/react";
 import { Camera } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
-import { gsap } from "../lib/gsap.js";
-import { PageLoader } from "../components/PageState.jsx";
+import { usePageMotion } from "../lib/usePageMotion.js";
+import { useBrandedLoadingScreen } from "../components/PageState.jsx";
 import ProfileImageCropDialog from "../components/ProfileImageCropDialog.jsx";
+import StudentActivityHeatmap from "../components/StudentActivityHeatmap.jsx";
 
 const tabs = [
   ["all", "All contributions"],
@@ -45,14 +45,22 @@ export default function ProfilePage() {
   const [cropSelection, setCropSelection] = useState(null);
   const [savingImage, setSavingImage] = useState("");
   const [imageMessage, setImageMessage] = useState(null);
+  const [activity, setActivity] = useState(null);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState("");
+  const [activityRetry, setActivityRetry] = useState(0);
   const avatarInputRef = useRef(null);
   const coverInputRef = useRef(null);
   const rootRef = useRef(null);
   const isOwner = Boolean(user && data?.profile.id === user.id);
+  const isActivityOwner = Boolean(
+    isOwner && user?.role === "user" && data?.profile.role === "user",
+  );
   const visibleContributions = useMemo(
     () => data?.contributions.filter((item) => activeTab === "all" || item.type === activeTab) ?? [],
     [activeTab, data],
   );
+  const loadingScreen = useBrandedLoadingScreen(loading, "Loading profile…");
 
   useEffect(() => {
     let active = true;
@@ -77,14 +85,35 @@ export default function ProfilePage() {
     };
   }, [username]);
 
-  useGSAP(() => {
-    if (!data || !rootRef.current) return;
-    gsap.fromTo(
-      rootRef.current.querySelectorAll("[data-profile-animate]"),
-      { autoAlpha: 0, y: 12 },
-      { autoAlpha: 1, y: 0, duration: 0.42, stagger: 0.06, ease: "power2.out" },
-    );
-  }, { scope: rootRef, dependencies: [data?.profile.username], revertOnUpdate: true });
+  useEffect(() => {
+    if (!isActivityOwner || !data?.profile.username) {
+      setActivity(null);
+      setActivityError("");
+      setActivityLoading(false);
+      return undefined;
+    }
+
+    let active = true;
+    setActivityLoading(true);
+    setActivityError("");
+    api.get(`/learning-activity/profiles/${encodeURIComponent(data.profile.username)}`)
+      .then(({ data: result }) => {
+        if (active) setActivity(result.activity);
+      })
+      .catch((requestError) => {
+        if (active) setActivityError(errorMessage(requestError));
+      })
+      .finally(() => {
+        if (active) setActivityLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [activityRetry, data?.profile.username, isActivityOwner]);
+
+  usePageMotion(rootRef, {
+    dependencies: [data?.profile.username, activeTab, visibleContributions.length],
+  });
 
   async function saveProfile(event) {
     event.preventDefault();
@@ -161,32 +190,36 @@ export default function ProfilePage() {
     }
   }
 
-  if (loading) return <PageLoader label="Loading profile…" />;
+  if (loading) return loadingScreen;
   if (error || !data) {
     return (
-      <main className="ed-profile-error">
-        <span aria-hidden="true" className="ed-profile-error-mark">?</span>
-        <p className="ed-profile-kicker">A LITTLE DETOUR</p>
-        <h1>Profile unavailable</h1>
-        <p className="ed-profile-error-message" role="alert">{error || "Profile not found."}</p>
-        <Link className="ed-profile-button ed-profile-button-dark" to="/search">
-          Explore resources <span aria-hidden="true">↗</span>
-        </Link>
-      </main>
+      <>
+        <main className="ed-profile-error">
+          <span aria-hidden="true" className="ed-profile-error-mark">?</span>
+          <p className="ed-profile-kicker">A LITTLE DETOUR</p>
+          <h1>Profile unavailable</h1>
+          <p className="ed-profile-error-message" role="alert">{error || "Profile not found."}</p>
+          <Link className="ed-profile-button ed-profile-button-dark" to="/search">
+            Explore resources <span aria-hidden="true">↗</span>
+          </Link>
+        </main>
+        {loadingScreen}
+      </>
     );
   }
 
   const { profile, stats } = data;
 
   return (
+    <>
     <main className="ed-profile-page">
       <div className="ed-profile-wrap" ref={rootRef}>
-        <div className="ed-profile-intro" data-profile-animate>
+        <div className="ed-profile-intro" data-motion-intro>
           <p className="ed-profile-kicker"><span aria-hidden="true">✳</span> A PAGE FROM YOUR STUDY STORY</p>
           <span className="ed-profile-intro-note">LEARN IT · SHARE IT · PASS IT ON</span>
         </div>
 
-        <section className="ed-profile-card" data-profile-animate>
+        <section className="ed-profile-card" data-motion-intro>
           <div
             aria-label="Profile cover poster"
             className={`ed-profile-cover${profile.coverImage ? " has-custom-cover" : ""}`}
@@ -227,7 +260,7 @@ export default function ProfilePage() {
 
           <div className="ed-profile-card-body">
             <div className="ed-profile-topline">
-              <div aria-label={`${profile.fullName} profile picture`} className="ed-profile-avatar">
+              <div aria-label={`${profile.fullName} profile picture`} className="ed-profile-avatar" data-motion-avatar>
                 <span>{initials(profile.fullName)}</span>
                 {profile.avatarUrl && (
                   <img
@@ -306,7 +339,7 @@ export default function ProfilePage() {
                   ["PYQ papers", stats.totalUploadedPyqs, "ed-stat-purple"],
                   ["Shared", stats.totalContributions, "ed-stat-lime"],
                 ].map(([label, count, tone]) => (
-                  <div className={`ed-profile-stat ${tone}`} key={label}>
+                  <div className={`ed-profile-stat ${tone}`} data-motion-stagger key={label}>
                     <strong>{count}</strong>
                     <span>{label}</span>
                   </div>
@@ -357,7 +390,15 @@ export default function ProfilePage() {
           </div>
         </section>
 
-        <section className="ed-profile-contributions" data-profile-animate>
+        <StudentActivityHeatmap
+          activity={activity}
+          error={activityError}
+          loading={isActivityOwner && activityLoading}
+          onRetry={() => setActivityRetry((current) => current + 1)}
+          privateView={!isActivityOwner}
+        />
+
+        <section className="ed-profile-contributions" data-motion-scroll>
           <div className="ed-profile-section-heading">
             <div>
               <p className="ed-profile-kicker"><span aria-hidden="true">✳</span> PASSED ON WITH PURPOSE</p>
@@ -384,7 +425,7 @@ export default function ProfilePage() {
           {visibleContributions.length ? (
             <div className="ed-profile-resource-grid">
               {visibleContributions.map((item) => (
-                <article className="ed-profile-resource" data-profile-animate key={`${item.type}-${item.id}`}>
+                <article className="ed-profile-resource" data-motion-stagger key={`${item.type}-${item.id}`}>
                   <div className="ed-resource-top">
                     <span className={`ed-resource-type ${item.type === "note" ? "ed-resource-type-notes" : "ed-resource-type-pyq"}`}>
                       <span aria-hidden="true">{item.type === "note" ? "▤" : "◷"}</span>
@@ -426,5 +467,7 @@ export default function ProfilePage() {
         />
       )}
     </main>
+    {loadingScreen}
+    </>
   );
 }

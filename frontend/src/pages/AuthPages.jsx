@@ -104,7 +104,7 @@ export function LoginPage({ admin = false }) {
       </form>
       {!admin && (
         <p className="mt-5 text-center text-sm text-slate-600">
-          New to StudyShare?{" "}
+          New to Topper?{" "}
           <Link className="font-semibold text-brand hover:underline" to="/register">
             Create an account
           </Link>
@@ -169,7 +169,11 @@ export function ForgotPasswordPage() {
     event.preventDefault();
     const { email } = Object.fromEntries(new FormData(event.currentTarget));
     await request.submit(async () => {
-      const { data } = await api.post("/auth/forgot-password", { email });
+      const { data } = await api.post(
+        "/auth/forgot-password",
+        { email },
+        { timeout: 30_000 },
+      );
       return data;
     });
   }

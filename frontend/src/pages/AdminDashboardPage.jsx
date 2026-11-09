@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import CommunityReports from "../components/dashboard/CommunityReports.jsx";
 import AdminRewardsPanel from "../components/AdminRewardsPanel.jsx";
 import Panel from "../components/Panel.jsx";
 import { api } from "../lib/api.js";
+import { usePageMotion } from "../lib/usePageMotion.js";
 
 const sections = [
   ["overview", "Overview"],
@@ -30,6 +31,7 @@ function messageFrom(error) {
 }
 
 export default function AdminDashboardPage() {
+  const rootRef = useRef(null);
   const [activeSection, setActiveSection] = useState("overview");
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -51,10 +53,12 @@ export default function AdminDashboardPage() {
     loadOverview();
   }, []);
 
+  usePageMotion(rootRef, { dependencies: [activeSection, loading, overview] });
+
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main className="min-h-screen bg-slate-50" ref={rootRef}>
       <section className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
-        <div className="relative mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-ink via-[#253372] to-indigo-700 px-5 py-7 text-white shadow-[0_24px_70px_-35px_rgba(30,41,59,0.6)] sm:px-8 sm:py-9">
+        <div className="relative mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-ink via-[#253372] to-indigo-700 px-5 py-7 text-white shadow-[0_24px_70px_-35px_rgba(30,41,59,0.6)] sm:px-8 sm:py-9" data-motion-intro>
           <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-20 size-64 rounded-full border-[34px] border-white/[0.06]" />
           <div className="relative flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -80,12 +84,12 @@ export default function AdminDashboardPage() {
         {overview && activeSection === "overview" && (
           <section aria-label="Platform metrics" className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {metricCards.map(([key, title, tone]) => (
-                <MetricCard key={key} title={title} tone={tone} value={overview.metrics[key]} />
+                <MetricCard data-motion-stagger key={key} title={title} tone={tone} value={overview.metrics[key]} />
               ))}
           </section>
         )}
 
-        <nav aria-label="Admin dashboard sections" className="my-6 flex snap-x gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+        <nav aria-label="Admin dashboard sections" className="my-6 flex snap-x gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-sm" data-motion-intro>
           {sections.map(([key, label]) => (
             <button
               aria-current={activeSection === key ? "page" : undefined}
@@ -125,7 +129,7 @@ export default function AdminDashboardPage() {
   );
 }
 
-function MetricCard({ title, value, tone }) {
+function MetricCard({ title, value, tone, ...props }) {
   const tones = {
     blue: "bg-sky-50 text-sky-700 ring-sky-100",
     indigo: "bg-indigo-50 text-indigo-700 ring-indigo-100",
@@ -137,9 +141,9 @@ function MetricCard({ title, value, tone }) {
     green: "bg-emerald-50 text-emerald-700 ring-emerald-100",
   };
   return (
-    <Panel className="p-4 shadow-[0_8px_24px_-20px_rgba(15,23,42,0.4)] transition hover:-translate-y-0.5 hover:shadow-md sm:p-5">
+    <Panel className="p-4 shadow-[0_8px_24px_-20px_rgba(15,23,42,0.4)] transition hover:-translate-y-0.5 hover:shadow-md sm:p-5" {...props}>
       <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{title}</p>
-      <p className={`mt-3 inline-flex min-w-14 items-center justify-center rounded-xl px-3 py-1.5 text-2xl font-extrabold ring-1 ring-inset ${tones[tone]}`}>
+      <p className={`mt-3 inline-flex min-w-14 items-center justify-center rounded-xl px-3 py-1.5 text-2xl font-extrabold ring-1 ring-inset ${tones[tone]}`} data-motion-count>
         {value}
       </p>
     </Panel>

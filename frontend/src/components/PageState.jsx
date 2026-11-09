@@ -1,34 +1,165 @@
-export function PageLoader({ label = "Getting your study space ready…" }) {
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useGSAP } from "@gsap/react";
+import { gsap } from "../lib/gsap.js";
+import AnimatedIllustration from "./AnimatedIllustration.jsx";
+import TopperLogo from "./TopperLogo.jsx";
+
+gsap.registerPlugin(useGSAP);
+
+export function PageLoader({
+  label = "Preparing your learning space…",
+  fullScreen = false,
+  exiting = false,
+  onExitComplete,
+}) {
+  const rootRef = useRef(null);
+
+  useGSAP(() => {
+    const root = rootRef.current;
+    if (!root) return undefined;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const progress = root.querySelector(".ed-loader-progress-indicator");
+
+    if (exiting) {
+      gsap.to(root, {
+        autoAlpha: 0,
+        scale: 0.985,
+        duration: reduceMotion ? 0.01 : 0.36,
+        ease: "power2.inOut",
+        onComplete: onExitComplete,
+      });
+      return undefined;
+    }
+
+    if (reduceMotion) return undefined;
+
+    const entrance = gsap.timeline({ defaults: { ease: "power3.out" } });
+    if (fullScreen) {
+      entrance
+        .fromTo(root.querySelector(".ed-loader-orbit"), { scale: 0.9, autoAlpha: 0 }, { scale: 1, autoAlpha: 1, duration: 0.5 })
+        .fromTo(root.querySelector(".ed-loader-copy"), { y: 12, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.45 }, "-=0.16");
+      gsap.to(progress, {
+        xPercent: 280,
+        duration: 1.25,
+        ease: "power2.inOut",
+        repeat: -1,
+        repeatDelay: 0.16,
+      });
+    } else {
+      entrance.fromTo(root.querySelector(".ed-loader-inline-logo"), { y: 5, autoAlpha: 0.7 }, {
+        y: 0,
+        autoAlpha: 1,
+        duration: 0.45,
+        repeat: -1,
+        yoyo: true,
+        ease: "sine.inOut",
+      });
+    }
+    return undefined;
+  }, { scope: rootRef, dependencies: [exiting, fullScreen, onExitComplete], revertOnUpdate: true });
+
+  if (fullScreen) {
+    return (
+      <div
+        aria-busy="true"
+        aria-live="polite"
+        className="ed-page-loader ed-page-loader-fullscreen"
+        ref={rootRef}
+        role="status"
+      >
+        <div aria-hidden="true" className="ed-loader-orbit">
+          <span className="ed-loader-orbit-ring ed-loader-orbit-ring-one" />
+          <span className="ed-loader-orbit-ring ed-loader-orbit-ring-two" />
+          <span className="ed-loader-orbit-star ed-loader-orbit-star-one">✦</span>
+          <span className="ed-loader-orbit-star ed-loader-orbit-star-two">✳</span>
+          <div className="ed-loader-logo"><TopperLogo loading size="large" /></div>
+        </div>
+        <div className="ed-loader-copy">
+          <p className="ed-loader-kicker">TOPPER · LEARN TOGETHER</p>
+          <span>{label}</span>
+          <div aria-hidden="true" className="ed-loader-progress-track">
+            <span className="ed-loader-progress-indicator" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div aria-busy="true" aria-live="polite" className="ed-page-loader" role="status">
-      <span aria-hidden="true" className="ed-loader-book">
-        <i /><i />
-      </span>
+    <div aria-busy="true" aria-live="polite" className="ed-page-loader ed-page-loader-inline" ref={rootRef} role="status">
+      <div className="ed-loader-inline-logo"><TopperLogo loading /></div>
       <span>{label}</span>
     </div>
   );
 }
 
-export function EmptyState({ title, children, icon = "book", className = "" }) {
+export function useBrandedLoadingScreen(active, label) {
+  const [visible, setVisible] = useState(active);
+  const hide = useCallback(() => setVisible(false), []);
+
+  useEffect(() => {
+    if (active) setVisible(true);
+  }, [active]);
+
+  if (!visible) return null;
+  return (
+    <PageLoader
+      exiting={!active}
+      fullScreen
+      label={label}
+      onExitComplete={hide}
+    />
+  );
+}
+
+export function EmptyState({ title, children, icon = "book", illustration, className = "" }) {
+  const variant = illustration ?? "book";
   return (
     <section className={`ed-empty-state ${className}`} data-ed-animate>
-      <span aria-hidden="true" className={`ed-empty-illustration ed-empty-${icon}`}>
-        {icon === "paper" ? (
-          <svg fill="none" viewBox="0 0 64 72">
-            <path d="M12 5h27l14 14v46H12z" fill="#fff9ec" stroke="currentColor" strokeLinejoin="round" strokeWidth="3" />
-            <path d="M39 5v15h14M21 33h23M21 41h23M21 49h15" stroke="currentColor" strokeLinecap="round" strokeWidth="3" />
-            <path d="m8 25-3 3m51 16 4 2" stroke="#ff6b24" strokeLinecap="round" strokeWidth="3" />
-          </svg>
-        ) : (
-          <svg fill="none" viewBox="0 0 72 64">
-            <path d="M7 16c10-4 19-3 29 3v36c-10-6-19-7-29-3V16Zm58 0c-10-4-19-3-29 3v36c10-6 19-7 29-3V16Z" fill="#fff9ec" stroke="currentColor" strokeLinejoin="round" strokeWidth="3" />
-            <path d="M13 25c6-2 12-1 17 2M13 33c6-2 12-1 17 2m25-10c-6-2-12-1-17 2m17 6c-6-2-12-1-17 2" stroke="#9270e8" strokeLinecap="round" strokeWidth="3" />
-            <path d="m36 4 2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5Z" fill="#ff6b24" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.5" />
-          </svg>
-        )}
+      <span className={`ed-empty-illustration ed-empty-${icon}`}>
+        <AnimatedIllustration variant={variant} size={66} />
       </span>
       <h2>{title}</h2>
       {children && <p>{children}</p>}
     </section>
+  );
+}
+
+function SuspensePending({ onStart, onFinish }) {
+  useEffect(() => {
+    onStart();
+    return onFinish;
+  }, [onFinish, onStart]);
+  return null;
+}
+
+function SuspenseReady({ children, onReady }) {
+  useEffect(() => onReady(), [onReady]);
+  return children;
+}
+
+export function BrandedSuspense({ children, label = "Preparing your learning space…" }) {
+  const [phase, setPhase] = useState("idle");
+  const start = useCallback(() => setPhase("loading"), []);
+  const finish = useCallback(
+    () => setPhase((current) => (current === "loading" ? "exiting" : current)),
+    [],
+  );
+  const completeExit = useCallback(() => setPhase("idle"), []);
+
+  return (
+    <>
+      <Suspense fallback={<SuspensePending onStart={start} onFinish={finish} />}>
+        <SuspenseReady onReady={finish}>{children}</SuspenseReady>
+      </Suspense>
+      {phase !== "idle" && (
+        <PageLoader
+          exiting={phase === "exiting"}
+          fullScreen
+          label={label}
+          onExitComplete={completeExit}
+        />
+      )}
+    </>
   );
 }

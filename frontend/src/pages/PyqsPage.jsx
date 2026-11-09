@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
 import { notifyResourceOptionsUpdated } from "../lib/resource-options.js";
 import AdUnit from "../components/AdUnit.jsx";
 import { PageLoader } from "../components/PageState.jsx";
+import { usePageMotion } from "../lib/usePageMotion.js";
 
 const initialFilters = {
   search: "",
@@ -53,6 +54,7 @@ function Field({ label, name, onChange, required = false, ...props }) {
 
 export default function PyqsPage() {
   const { user } = useAuth();
+  const rootRef = useRef(null);
   const [filters, setFilters] = useState(initialFilters);
   const [appliedFilters, setAppliedFilters] = useState(initialFilters);
   const [pyqs, setPyqs] = useState([]);
@@ -112,6 +114,8 @@ export default function PyqsPage() {
       semester: current.semester || (user?.semester ? String(user.semester) : ""),
     }));
   }, [user]);
+
+  usePageMotion(rootRef, { dependencies: [loading, pyqs.length, page, showUpload] });
 
   function applyFilters(event) {
     event.preventDefault();
@@ -242,9 +246,9 @@ export default function PyqsPage() {
   }
 
   return (
-    <main className="ed-pyqs-page min-h-screen bg-slate-50">
+    <main className="ed-pyqs-page min-h-screen bg-slate-50" ref={rootRef}>
       <section className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
-        <div className="ed-pyq-hero relative mb-6 flex flex-wrap items-end justify-between gap-4 rounded-3xl border border-indigo-100 bg-gradient-to-br from-white via-white to-indigo-50 px-5 py-7 shadow-sm sm:mb-8 sm:px-8 sm:py-9" data-ed-animate>
+        <div className="ed-pyq-hero relative mb-6 flex flex-wrap items-end justify-between gap-4 rounded-3xl border border-indigo-100 bg-gradient-to-br from-white via-white to-indigo-50 px-5 py-7 shadow-sm sm:mb-8 sm:px-8 sm:py-9" data-motion-intro>
           <div className="ed-pyq-hero-copy min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand sm:text-sm">
               Free student resources
@@ -273,6 +277,7 @@ export default function PyqsPage() {
         {showUpload && user?.role === "user" && (
           <form
             className="mb-7 rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm sm:p-7"
+            data-motion-scroll
             onSubmit={handleUpload}
           >
             <div className="mb-5">
@@ -358,7 +363,7 @@ export default function PyqsPage() {
         )}
 
         <div className="grid min-w-0 items-start gap-5 lg:grid-cols-[270px_minmax(0,1fr)] lg:gap-6">
-          <aside className="ed-pyq-filter h-fit min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <aside className="ed-pyq-filter h-fit min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" data-motion-scroll>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-bold text-ink">Find a paper</h2>
               {user?.role === "user" && (
@@ -432,7 +437,7 @@ export default function PyqsPage() {
 
           <section aria-label="Previous year question papers">
             <AdUnit className="mb-5" placement="pyqs" />
-            <div className="ed-pyq-results-bar mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <div className="ed-pyq-results-bar mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3" data-motion-scroll>
               <p className="text-sm text-slate-600">
                 {bookmarksOnly ? `${pyqs.length} saved papers` : `${pagination.total} public papers`}
               </p>
@@ -445,7 +450,7 @@ export default function PyqsPage() {
             {loading ? (
               <div className="ed-pyq-loading"><PageLoader label="Loading papers…" /></div>
             ) : pyqs.length === 0 ? (
-              <div className="ed-pyq-empty rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm" data-ed-animate>
+              <div className="ed-pyq-empty rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm" data-motion-scroll>
                 <svg aria-hidden="true" className="mx-auto mb-4 size-10 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M7 3.75h7l4 4v12.5H7a2 2 0 0 1-2-2v-12.5a2 2 0 0 1 2-2Z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14 3.75v4h4M8.5 12h7M8.5 15.5h7" />
@@ -456,7 +461,7 @@ export default function PyqsPage() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {pyqs.map((pyq) => (
-                  <article className="ed-pyq-card flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md sm:p-5" data-ed-animate key={pyq.id}>
+                  <article className="ed-pyq-card flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md sm:p-5" data-motion-stagger key={pyq.id}>
                     <div className="flex items-start justify-between gap-3">
                       <span className="rounded-lg bg-rose-50 px-2.5 py-1 text-xs font-bold uppercase text-rose-700">{pyq.fileFormat?.toUpperCase()} · Public</span>
                       <span className="rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-brand">

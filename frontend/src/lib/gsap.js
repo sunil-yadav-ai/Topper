@@ -1,9 +1,10 @@
 import { gsap } from "gsap";
+import { DrawSVGPlugin } from "gsap/DrawSVGPlugin";
 import { Flip } from "gsap/Flip";
 import { MotionPathPlugin } from "gsap/MotionPathPlugin";
 import { Observer } from "gsap/Observer";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
-gsap.registerPlugin(Flip, MotionPathPlugin, Observer, ScrollTrigger);
+gsap.registerPlugin(DrawSVGPlugin, Flip, MotionPathPlugin, Observer, ScrollTrigger);
 
-export { Flip, MotionPathPlugin, Observer, ScrollTrigger, gsap };
+export { DrawSVGPlugin, Flip, MotionPathPlugin, Observer, ScrollTrigger, gsap };

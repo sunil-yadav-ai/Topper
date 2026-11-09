@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api.js";
+import { usePageMotion } from "../lib/usePageMotion.js";
 
 const sections = [
   ["saved", "Saved resources"],
@@ -13,6 +14,7 @@ function messageFromError(error) {
 }
 
 export default function LibraryPage() {
+  const rootRef = useRef(null);
   const [section, setSection] = useState("saved");
   const [items, setItems] = useState([]);
   const [folders, setFolders] = useState([]);
@@ -108,10 +110,12 @@ export default function LibraryPage() {
       ? items.filter((item) => item.folder === folderFilter)
       : items;
 
+  usePageMotion(rootRef, { dependencies: [section, loading, filteredItems.length] });
+
   return (
-    <main className="ed-library-page min-h-screen bg-slate-50">
+    <main className="ed-library-page min-h-screen bg-slate-50" ref={rootRef}>
       <section className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-ink via-[#253372] to-indigo-700 px-5 py-7 text-white shadow-[0_24px_70px_-35px_rgba(30,41,59,0.6)] sm:px-8 sm:py-9">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-ink via-[#253372] to-indigo-700 px-5 py-7 text-white shadow-[0_24px_70px_-35px_rgba(30,41,59,0.6)] sm:px-8 sm:py-9" data-motion-intro>
           <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-20 size-64 rounded-full border-[34px] border-white/[0.06]" />
           <div className="relative">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-200">Your free study collection</p>
@@ -121,7 +125,7 @@ export default function LibraryPage() {
         </div>
 
         <div className="mt-7 grid gap-6 lg:grid-cols-[230px_1fr]">
-          <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-2 shadow-sm lg:sticky lg:top-5">
+          <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-2 shadow-sm lg:sticky lg:top-5" data-motion-intro>
             <nav aria-label="Library sections" className="flex gap-1 overflow-x-auto lg:flex-col">
               {sections.map(([key, title]) => (
                 <button
@@ -145,7 +149,7 @@ export default function LibraryPage() {
           </aside>
 
           <section aria-label={sections.find(([key]) => key === section)?.[1]}>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3" data-motion-intro>
               <div>
                 <h2 className="text-xl font-bold text-ink">{sections.find(([key]) => key === section)?.[1]}</h2>
                 <p className="mt-1 text-sm text-slate-500">{filteredItems.length} resource{filteredItems.length === 1 ? "" : "s"}</p>
@@ -169,7 +173,7 @@ export default function LibraryPage() {
             {loading ? (
               <p className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-600">Loading your library…</p>
             ) : filteredItems.length === 0 ? (
-              <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+              <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center" data-motion-scroll>
                 <h3 className="font-bold text-ink">Nothing here yet</h3>
                 <p className="mt-2 text-sm text-slate-500">
                   {section === "saved"
@@ -185,7 +189,7 @@ export default function LibraryPage() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {filteredItems.map((item) => (
-                  <article                   className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_-20px_rgba(15,23,42,0.4)] transition hover:-translate-y-0.5 hover:border-indigo-100 hover:shadow-md" key={item.bookmarkId ?? `${item.type}-${item.id}`}>
+                  <article className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_-20px_rgba(15,23,42,0.4)] transition hover:-translate-y-0.5 hover:border-indigo-100 hover:shadow-md" data-motion-stagger key={item.bookmarkId ?? `${item.type}-${item.id}`}>
                     <div className="flex items-center justify-between gap-2">
                       <span className="rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-bold uppercase text-brand">{item.type === "note" ? "Notes" : "PYQ"} · Free</span>
                       {section === "saved" && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{item.folder}</span>}

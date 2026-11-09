@@ -9,17 +9,37 @@ export default function AuthLayout({ children, eyebrow, title, description }) {
   const rootRef = useRef(null);
 
   useGSAP(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    gsap.fromTo(
-      ".ed-auth-card",
-      { autoAlpha: 0, y: 22 },
-      { autoAlpha: 1, y: 0, duration: 0.7, ease: "power3.out" },
+    const motion = gsap.matchMedia();
+    motion.add(
+      {
+        reduce: "(prefers-reduced-motion: reduce)",
+        desktop: "(min-width: 900px)",
+      },
+      ({ conditions }) => {
+        if (conditions.reduce) return undefined;
+        const intro = gsap.timeline({ defaults: { ease: "power3.out" } });
+        intro
+          .fromTo(
+            ".ed-auth-card",
+            { autoAlpha: 0, y: conditions.desktop ? 22 : 12 },
+            { autoAlpha: 1, y: 0, duration: 0.65 },
+          )
+          .fromTo(
+            ".ed-auth-story-copy > *, .ed-auth-form-panel > .ed-auth-eyebrow, .ed-auth-form-panel > h1, .ed-auth-form-panel > .ed-auth-description, .ed-auth-form-content",
+            { autoAlpha: 0, y: 12 },
+            { autoAlpha: 1, y: 0, duration: 0.46, stagger: 0.06 },
+            "-=0.35",
+          )
+          .fromTo(
+            ".ed-auth-art-card",
+            { autoAlpha: 0, scale: 0.88, rotation: -7 },
+            { autoAlpha: 1, scale: 1, rotation: -3, duration: 0.62, ease: "back.out(1.5)" },
+            "-=0.25",
+          );
+        return undefined;
+      },
     );
-    gsap.fromTo(
-      ".ed-auth-art-card",
-      { autoAlpha: 0, scale: 0.86, rotation: -7 },
-      { autoAlpha: 1, scale: 1, rotation: -3, duration: 0.65, delay: 0.2, ease: "back.out(1.5)" },
-    );
+    return () => motion.revert();
   }, { scope: rootRef });
 
   return (

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useGSAP } from "@gsap/react";
 import {
   BookOpen,
   ChevronLeft,
@@ -15,11 +14,9 @@ import { api } from "../lib/api.js";
 import {
   subscribeResourceOptionsUpdated,
 } from "../lib/resource-options.js";
-import { gsap } from "../lib/gsap.js";
+import { usePageMotion } from "../lib/usePageMotion.js";
 import AdUnit from "../components/AdUnit.jsx";
 import { EmptyState, PageLoader } from "../components/PageState.jsx";
-
-gsap.registerPlugin(useGSAP);
 
 const pageSize = 12;
 const noteMarksOptions = ["2", "3", "4", "5", "6", "8", "10", "12", "15", "20"];
@@ -70,6 +67,32 @@ function TextField({ label, name, onChange, value, ...props }) {
         {...props}
       />
     </label>
+  );
+}
+
+function NotePreviewBackground({ src }) {
+  const [failed, setFailed] = useState(!src);
+
+  return (
+    <>
+      {src && !failed ? (
+        <img
+          alt=""
+          className="resource-card__preview"
+          loading="lazy"
+          onError={() => setFailed(true)}
+          referrerPolicy="no-referrer"
+          src={`${api.defaults.baseURL}${src}`}
+        />
+      ) : (
+        <div aria-hidden="true" className="resource-card__fallback">
+          <div className="flex flex-col items-center gap-2">
+            <FileText size={54} strokeWidth={1.2} />
+            <span className="text-xs font-semibold tracking-wide">PREVIEW UNAVAILABLE</span>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -207,15 +230,7 @@ export default function ResourceSearchPage() {
     };
   }, [activeTab, topicPrefix]);
 
-  useGSAP(() => {
-    const content = rootRef.current?.querySelectorAll("[data-search-animate]");
-    if (!content?.length) return;
-    gsap.fromTo(
-      content,
-      { autoAlpha: 0, y: 12 },
-      { autoAlpha: 1, y: 0, duration: 0.38, stagger: 0.045, ease: "power2.out" },
-    );
-  }, { scope: rootRef, dependencies: [activeTab, resources.length], revertOnUpdate: true });
+  usePageMotion(rootRef, { dependencies: [activeTab, loading, resources.length] });
 
   function updateDraft(event) {
     const { name, value } = event.target;
@@ -339,20 +354,20 @@ export default function ResourceSearchPage() {
   }
 
   return (
-    <main className="ed-resource-search-page min-h-screen bg-slate-50" ref={rootRef}>
+    <main className="ed-resource-search-page ed-explore-page min-h-screen bg-slate-50" ref={rootRef}>
       <section className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
-        <header className="mb-6 rounded-3xl border border-orange-100 bg-gradient-to-br from-white via-white to-orange-50 px-5 py-7 shadow-sm sm:mb-8 sm:px-8 sm:py-9" data-search-animate>
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand sm:text-sm">The EduRise resource library</p>
+        <header className="ed-explore-hero mb-6 rounded-3xl border border-orange-100 bg-gradient-to-br from-white via-white to-orange-50 px-5 py-7 shadow-sm sm:mb-8 sm:px-8 sm:py-9" data-motion-intro>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand sm:text-sm">The Topper resource library</p>
           <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Find your next study resource</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
             Explore student notes and previous-year question papers. AI verification results are shown separately from publication.
           </p>
         </header>
 
-        <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl border border-orange-100 bg-white p-2 shadow-sm" role="tablist" aria-label="Resource search type" data-search-animate>
+        <div className="ed-explore-tabs mb-5 grid grid-cols-2 gap-2 rounded-2xl border border-orange-100 bg-white p-2 shadow-sm" role="tablist" aria-label="Resource search type" data-motion-intro>
           <button
             aria-selected={activeTab === "note"}
-            className={`flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-bold transition sm:text-base ${activeTab === "note" ? "bg-brand text-white shadow-sm" : "text-slate-600 hover:bg-orange-50 hover:text-ink"}`}
+            className={`ed-explore-tab flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-bold transition sm:text-base ${activeTab === "note" ? "is-active bg-brand text-white shadow-sm" : "text-slate-600 hover:bg-orange-50 hover:text-ink"}`}
             onClick={() => chooseTab("note")}
             role="tab"
             type="button"
@@ -362,7 +377,7 @@ export default function ResourceSearchPage() {
           </button>
           <button
             aria-selected={activeTab === "pyq"}
-            className={`flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-bold transition sm:text-base ${activeTab === "pyq" ? "bg-brand text-white shadow-sm" : "text-slate-600 hover:bg-orange-50 hover:text-ink"}`}
+            className={`ed-explore-tab flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-bold transition sm:text-base ${activeTab === "pyq" ? "is-active bg-brand text-white shadow-sm" : "text-slate-600 hover:bg-orange-50 hover:text-ink"}`}
             onClick={() => chooseTab("pyq")}
             role="tab"
             type="button"
@@ -372,7 +387,7 @@ export default function ResourceSearchPage() {
           </button>
         </div>
 
-        <form className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6" onSubmit={applyFilters} role="tabpanel" data-search-animate>
+        <form className="ed-explore-filters mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6" onSubmit={applyFilters} role="tabpanel" data-motion-intro>
           <div className="mb-4 flex items-center gap-2">
             {activeTab === "note" ? (
               <BookOpen aria-hidden="true" className="text-brand" size={20} />
@@ -525,12 +540,12 @@ export default function ResourceSearchPage() {
               </p>
             )}
 
-          <div className="mt-5 flex flex-wrap items-center gap-3">
-            <button className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:shadow-md disabled:opacity-60" disabled={optionsLoading} type="submit">
+          <div className="ed-explore-filter-actions mt-5 flex flex-wrap items-center gap-3">
+            <button className="ed-explore-search-button inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:shadow-md disabled:opacity-60" disabled={optionsLoading} type="submit">
               <Search aria-hidden="true" size={17} />
               Search
             </button>
-            <button className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-orange-200 hover:bg-orange-50" onClick={clearFilters} type="button">
+            <button className="ed-explore-clear-button inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-orange-200 hover:bg-orange-50" onClick={clearFilters} type="button">
               <RotateCcw aria-hidden="true" size={16} />
               Clear filters
             </button>
@@ -541,11 +556,11 @@ export default function ResourceSearchPage() {
           </div>
         </form>
 
-        <section aria-label={activeTab === "note" ? "Notes search results" : "Question paper search results"}>
+        <section className="ed-explore-results" aria-label={activeTab === "note" ? "Notes search results" : "Question paper search results"}>
           <AdUnit className="mb-5" placement="search" />
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3" data-search-animate>
+          <div className="ed-explore-results-bar mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3" data-motion-scroll>
             <p className="text-sm text-slate-600">
-              {pagination.total} {activeTab === "note" ? "public note" : "public question paper"}{pagination.total === 1 ? "" : "s"}
+              <strong>{pagination.total}</strong> {activeTab === "note" ? "public note" : "public question paper"}{pagination.total === 1 ? "" : "s"}
             </p>
             <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
               {activeTab === "note" ? "Public notes" : "Public question papers"}
@@ -556,7 +571,7 @@ export default function ResourceSearchPage() {
           {loading ? (
             <PageLoader label={activeTab === "note" ? "Searching notes…" : "Searching question papers…"} />
           ) : resources.length === 0 ? (
-            <EmptyState icon="book" title={activeTab === "note" ? "No notes found" : "No question papers found"}>
+            <EmptyState icon="book" illustration={activeTab === "note" ? "search" : "book"} title={activeTab === "note" ? "No notes found" : "No question papers found"}>
               {Object.values(activeFilters).some(Boolean)
                 ? "No searchable resources match these filters. Try different filters or clear your search."
                 : activeTab === "note"
@@ -564,41 +579,42 @@ export default function ResourceSearchPage() {
                   : "Question papers appear here as soon as students upload them."}
             </EmptyState>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="ed-explore-resource-grid grid gap-5 md:grid-cols-2">
               {resources.map((resource) => {
                 const hasVoted = helpfulVotes.has(`${resource.type}:${resource.id}`);
                 return (
-                  <article className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-1 hover:border-orange-200 hover:shadow-lg sm:p-5" key={`${resource.type}-${resource.id}`} data-search-animate>
+                  <article className={`ed-explore-resource-card resource-card group relative flex min-w-0 flex-col overflow-hidden rounded-[1.65rem] border border-orange-100 shadow-[0_12px_30px_rgba(23,23,23,0.08)] transition duration-300 hover:-translate-y-1 hover:border-orange-200 hover:shadow-[0_20px_40px_rgba(23,23,23,0.15)] ${resource.type === "note" ? "resource-card--note" : "bg-[#fff9ec]"}`} key={`${resource.type}-${resource.id}`} data-motion-stagger>
+                    {resource.type === "note" && (
+                      <NotePreviewBackground src={resource.previewPath} />
+                    )}
+                    <div className={`ed-explore-card-content relative z-10 flex min-h-full flex-col p-4 sm:p-5 ${resource.type === "note" ? "min-h-[550px]" : ""}`}>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="rounded-lg bg-orange-50 px-2.5 py-1 text-xs font-bold uppercase text-brand">
+                      <span className="ed-explore-badge rounded-lg border border-orange-200/80 bg-white/80 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-brand shadow-sm backdrop-blur-md">
                         {resource.type === "note" ? "Student notes" : "Question paper"}
                       </span>
-                      <span className="text-xs text-slate-500">{resource.fileFormat?.toUpperCase()}</span>
+                      <span className="ed-explore-format rounded-lg border border-white/80 bg-white/75 px-2.5 py-1 text-xs font-bold uppercase text-slate-600 shadow-sm backdrop-blur-md">{resource.fileFormat?.toUpperCase()}</span>
                     </div>
-                    <h3 className="mt-4 break-words text-lg font-bold text-ink">{resource.title}</h3>
-                    <p className="mt-1 line-clamp-2 break-words text-sm text-slate-600">{resource.description}</p>
-                    <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                      <div><dt className="text-xs text-slate-500">Subject</dt><dd className="font-semibold text-slate-800">{resource.subject}</dd></div>
+                    <h3 className="ed-explore-card-title mt-4 break-words text-lg font-bold text-ink">{resource.title}</h3>
+                    <p className="ed-explore-card-description mt-1 line-clamp-2 break-words text-sm leading-relaxed text-slate-700">{resource.description}</p>
+                    <dl className="ed-explore-card-details mt-4 grid grid-cols-2 gap-3 rounded-2xl border border-white/70 bg-white/55 p-3 text-sm shadow-sm backdrop-blur-md">
+                      <div><dt className="text-xs font-medium text-slate-500">Subject</dt><dd className="break-words font-semibold text-slate-800">{resource.subject}</dd></div>
                       {resource.type === "note" ? (
                         <>
-                          {resource.topic && <div><dt className="text-xs text-slate-500">Topic</dt><dd className="font-semibold text-slate-800">{resource.topic}</dd></div>}
-                          {resource.unit && <div><dt className="text-xs text-slate-500">Unit</dt><dd className="font-semibold text-slate-800">{resource.unit}</dd></div>}
-                          {resource.marks && <div><dt className="text-xs text-slate-500">Marks</dt><dd className="font-semibold text-slate-800">{resource.marks}</dd></div>}
-                          <div><dt className="text-xs text-slate-500">Semester</dt><dd className="font-semibold text-slate-800">{resource.semester}</dd></div>
+                          {resource.topic && <div><dt className="text-xs font-medium text-slate-500">Topic</dt><dd className="break-words font-semibold text-slate-800">{resource.topic}</dd></div>}
+                          {resource.unit && <div><dt className="text-xs font-medium text-slate-500">Unit</dt><dd className="break-words font-semibold text-slate-800">{resource.unit}</dd></div>}
+                          <div><dt className="text-xs font-medium text-slate-500">Marks</dt><dd className="font-semibold text-slate-800">{resource.marks ?? "—"}</dd></div>
+                          <div><dt className="text-xs font-medium text-slate-500">Semester</dt><dd className="font-semibold text-slate-800">{resource.semester}</dd></div>
+                          <div><dt className="text-xs font-medium text-slate-500">University</dt><dd className="break-words font-semibold text-slate-800">{resource.university || "—"}</dd></div>
+                          <div><dt className="text-xs font-medium text-slate-500">Department</dt><dd className="break-words font-semibold text-slate-800">{resource.department || "—"}</dd></div>
                         </>
                       ) : (
                         <>
-                          <div><dt className="text-xs text-slate-500">University</dt><dd className="font-semibold text-slate-800">{resource.university}</dd></div>
-                          <div><dt className="text-xs text-slate-500">Year</dt><dd className="font-semibold text-slate-800">{resource.examinationYear}</dd></div>
-                          <div><dt className="text-xs text-slate-500">Paper</dt><dd className="font-semibold text-slate-800">{resource.examType} · Sem {resource.semester}</dd></div>
+                          <div><dt className="text-xs font-medium text-slate-500">University</dt><dd className="font-semibold text-slate-800">{resource.university}</dd></div>
+                          <div><dt className="text-xs font-medium text-slate-500">Year</dt><dd className="font-semibold text-slate-800">{resource.examinationYear}</dd></div>
+                          <div><dt className="text-xs font-medium text-slate-500">Paper</dt><dd className="font-semibold text-slate-800">{resource.examType} · Sem {resource.semester}</dd></div>
                         </>
                       )}
                     </dl>
-                    {resource.type === "note" && (
-                      <p className="mt-3 line-clamp-1 text-xs text-slate-500">
-                        {[resource.university, resource.department, resource.batch].filter(Boolean).join(" · ")}
-                      </p>
-                    )}
                     {resource.uploader?.username && (
                       <Link className="mt-2 w-fit text-xs font-semibold text-brand hover:underline" to={`/profile/${encodeURIComponent(resource.uploader.username)}`}>
                         Shared by {resource.uploader.fullName}
@@ -609,23 +625,23 @@ export default function ResourceSearchPage() {
                         {[resource.department, resource.college, resource.uploader?.fullName && `Uploaded by ${resource.uploader.fullName}`].filter(Boolean).join(" · ")}
                       </p>
                     )}
-                    <p className="mt-2 text-xs text-slate-400">{new Date(resource.createdAt).toLocaleDateString()} · {resource.helpfulCount} found helpful</p>
-                    <div className="mt-auto flex flex-wrap items-center gap-2 pt-5">
+                    <p className="mt-2 text-xs font-medium text-slate-600">{new Date(resource.createdAt).toLocaleDateString()} · {resource.helpfulCount} found helpful</p>
+                    <div className="ed-explore-card-actions mt-auto flex flex-wrap items-center gap-2 pt-5">
                       {user ? (
                         <>
-                          <Link className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-center text-sm font-bold text-slate-700 transition hover:bg-orange-50" to={`/resources/${resource.type}/${resource.id}`}>
+                          <Link className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/85 px-3 py-2.5 text-center text-sm font-bold text-slate-700 shadow-sm transition hover:bg-orange-50" to={`/resources/${resource.type}/${resource.id}`}>
                             <FileText aria-hidden="true" size={16} />
                             View Resource
                           </Link>
                         </>
                       ) : (
-                        <Link className="flex-1 rounded-xl bg-brand px-3 py-2.5 text-center text-sm font-bold text-white hover:bg-orange-700" to="/login">
+                        <Link className="flex-1 rounded-xl bg-brand px-3 py-2.5 text-center text-sm font-bold text-white shadow-sm transition hover:bg-orange-700" to="/login">
                           Sign in to open
                         </Link>
                       )}
                       {user?.role === "user" && (
                         <button
-                          className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                          className="rounded-xl border border-slate-200 bg-white/85 px-3 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
                           disabled={voting === resource.id || hasVoted}
                           onClick={() => voteHelpful(resource)}
                           type="button"
@@ -635,7 +651,7 @@ export default function ResourceSearchPage() {
                       )}
                       {user?.role === "user" && (
                         <button
-                          className="rounded-xl border border-orange-200 px-3 py-2.5 text-xs font-semibold text-brand hover:bg-orange-50 disabled:opacity-50"
+                          className="rounded-xl border border-orange-200 bg-white/85 px-3 py-2.5 text-xs font-semibold text-brand shadow-sm transition hover:bg-orange-50 disabled:opacity-50"
                           disabled={bookmarkingId === resource.id}
                           onClick={() => toggleBookmark(resource)}
                           type="button"
@@ -645,16 +661,17 @@ export default function ResourceSearchPage() {
                       )}
                       {resource.type === "note" && user?.role === "user" && (
                         <button
-                          className="rounded-xl border border-rose-200 px-3 py-2.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                          className="rounded-xl border border-rose-200 bg-white/85 px-3 py-2.5 text-xs font-semibold text-rose-700 shadow-sm transition hover:bg-rose-50"
                           onClick={() => {
                             setReportTarget(resource);
                             setReportForm((current) => ({ ...current, pageNumber: "1" }));
                           }}
                           type="button"
                         >
-                          Report mistake
+                          Report Mistake
                         </button>
                       )}
+                    </div>
                     </div>
                   </article>
                 );
