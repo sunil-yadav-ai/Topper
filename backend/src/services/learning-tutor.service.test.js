@@ -5,7 +5,7 @@ import test from "node:test";
 process.env.OCR_ENCRYPTION_KEY = randomBytes(32).toString("base64");
 process.env.OPENAI_API_KEY = "tutor-test-key";
 const [
-  { nextDifficulty, serializeLearningSession, startTutorSession, answerTutorQuestion },
+  { nextDifficulty, requestStructuredOutput, serializeLearningSession, startTutorSession, answerTutorQuestion },
   { encryptJson },
   { default: LearningSession },
   { default: Note },
@@ -17,6 +17,51 @@ const [
   import("../models/Note.js"),
   import("../models/NoteOcrResult.js"),
 ]);
+
+test("the AI tutor distinguishes exhausted API quota from temporary rate limiting", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  const request = {
+    instructions: "Return structured data.",
+    input: {},
+    name: "test_response",
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      properties: { text: { type: "string" } },
+      required: ["text"],
+    },
+  };
+
+  globalThis.fetch = async () => Response.json({
+    error: { code: "insufficient_quota", type: "insufficient_quota" },
+  }, { status: 429 });
+  await assert.rejects(
+    requestStructuredOutput(request),
+    (error) => {
+      assert.equal(error.statusCode, 503);
+      assert.equal(error.expose, true);
+      assert.match(error.message, /no remaining quota/i);
+      assert.match(error.message, /restore API billing/i);
+      return true;
+    },
+  );
+
+  globalThis.fetch = async () => Response.json({
+    error: { code: "rate_limit_exceeded", type: "requests" },
+  }, { status: 429 });
+  await assert.rejects(
+    requestStructuredOutput(request),
+    (error) => {
+      assert.equal(error.statusCode, 503);
+      assert.equal(error.expose, true);
+      assert.match(error.message, /wait a moment/i);
+      return true;
+    },
+  );
+});
 
 test("correct short answers raise the tutor difficulty one level at a time", () => {
   assert.equal(
@@ -342,6 +387,7 @@ test("the tutor refuses to invent questions when note OCR is unavailable", async
     publicationStatus: "published",
     visibility: "public",
     ocrStatus: "failed",
+    ocrError: "Text extraction stopped because the OpenAI API account has no remaining quota. Restore API billing, then requeue this note's OCR.",
     uploadedBy: { equals: () => false },
   });
   NoteOcrResult.findOne = () => ({
@@ -359,7 +405,7 @@ test("the tutor refuses to invent questions when note OCR is unavailable", async
       user: { _id: "507f1f77bcf86cd799439011", role: "user" },
     });
     assert.equal(result.available, false);
-    assert.match(result.message, /could not read text/i);
+    assert.match(result.message, /OpenAI API account has no remaining quota/i);
     assert.equal("session" in result, false);
   } finally {
     Note.findById = originalFindById;

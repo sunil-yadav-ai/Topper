@@ -2,6 +2,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useGSAP } from "@gsap/react";
 import { gsap } from "../lib/gsap.js";
 import AnimatedIllustration from "./AnimatedIllustration.jsx";
+import FlyingStudentsMascot from "./FlyingStudentsMascot.jsx";
 import TopperLogo from "./TopperLogo.jsx";
 
 gsap.registerPlugin(useGSAP);
@@ -36,7 +37,7 @@ export function PageLoader({
     const entrance = gsap.timeline({ defaults: { ease: "power3.out" } });
     if (fullScreen) {
       entrance
-        .fromTo(root.querySelector(".ed-loader-orbit"), { scale: 0.9, autoAlpha: 0 }, { scale: 1, autoAlpha: 1, duration: 0.5 })
+        .fromTo(root.querySelector(".ed-loader-mascot"), { y: 14, scale: 0.94, autoAlpha: 0 }, { y: 0, scale: 1, autoAlpha: 1, duration: 0.6 })
         .fromTo(root.querySelector(".ed-loader-copy"), { y: 12, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.45 }, "-=0.16");
       gsap.to(progress, {
         xPercent: 280,
@@ -67,13 +68,7 @@ export function PageLoader({
         ref={rootRef}
         role="status"
       >
-        <div aria-hidden="true" className="ed-loader-orbit">
-          <span className="ed-loader-orbit-ring ed-loader-orbit-ring-one" />
-          <span className="ed-loader-orbit-ring ed-loader-orbit-ring-two" />
-          <span className="ed-loader-orbit-star ed-loader-orbit-star-one">✦</span>
-          <span className="ed-loader-orbit-star ed-loader-orbit-star-two">✳</span>
-          <div className="ed-loader-logo"><TopperLogo loading size="large" /></div>
-        </div>
+        <FlyingStudentsMascot className="ed-loader-mascot" />
         <div className="ed-loader-copy">
           <p className="ed-loader-kicker">TOPPER · LEARN TOGETHER</p>
           <span>{label}</span>

@@ -6,6 +6,7 @@ import { notifyResourceOptionsUpdated } from "../lib/resource-options.js";
 import AdUnit from "../components/AdUnit.jsx";
 import { PageLoader } from "../components/PageState.jsx";
 import { usePageMotion } from "../lib/usePageMotion.js";
+import useResponsiveFilters from "../lib/useResponsiveFilters.js";
 
 const initialFilters = {
   search: "",
@@ -55,6 +56,7 @@ function Field({ label, name, onChange, required = false, ...props }) {
 export default function PyqsPage() {
   const { user } = useAuth();
   const rootRef = useRef(null);
+  const [filtersOpen, setFiltersOpen] = useResponsiveFilters();
   const [filters, setFilters] = useState(initialFilters);
   const [appliedFilters, setAppliedFilters] = useState(initialFilters);
   const [pyqs, setPyqs] = useState([]);
@@ -379,7 +381,15 @@ export default function PyqsPage() {
                 </button>
               )}
             </div>
-            <form className="space-y-4" onSubmit={applyFilters}>
+            <details
+              className="ed-responsive-filter-disclosure"
+              onToggle={(event) => setFiltersOpen(event.currentTarget.open)}
+              open={filtersOpen}
+            >
+              <summary className="ed-responsive-filter-summary">
+                <span>{filtersOpen ? "Hide filters" : "Show filters"}</span>
+              </summary>
+              <form className="space-y-4" onSubmit={applyFilters}>
               <Field
                 label="Search"
                 name="search"
@@ -432,7 +442,8 @@ export default function PyqsPage() {
               >
                 Clear filters
               </button>
-            </form>
+              </form>
+            </details>
           </aside>
 
           <section aria-label="Previous year question papers">

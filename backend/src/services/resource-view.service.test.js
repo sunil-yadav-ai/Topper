@@ -41,12 +41,14 @@ test("streams a requested PDF byte range inline without exposing a storage URL",
         url: "https://secure-storage.example/signed-file",
         format: "pdf",
         fileName: "lecture notes.pdf",
+        uploaderName: "Aarav Sharma",
       },
     );
     assert.equal(fetchedUrl, "https://secure-storage.example/signed-file");
     assert.equal(forwardedRange, "bytes=0-14");
     assert.equal(response.statusCode, 206);
     assert.equal(response.headers["Content-Type"], "application/pdf");
+    assert.equal(response.headers["X-Resource-Uploader"], "Aarav%20Sharma");
     assert.match(response.headers["Content-Disposition"], /^inline;/);
     assert.equal(response.headers["Cache-Control"], "private, no-store");
     assert.equal(response.headers["Accept-Ranges"], "bytes");

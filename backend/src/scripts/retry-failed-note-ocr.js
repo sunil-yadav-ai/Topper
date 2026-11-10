@@ -5,16 +5,19 @@ import NoteOcrJob from "../models/NoteOcrJob.js";
 import NoteVerificationJob from "../models/NoteVerificationJob.js";
 
 const apply = process.argv.includes("--apply");
+const includePublished = process.argv.includes("--include-published");
 
 await mongoose.connect(env.mongodbUri);
 
 try {
   const notes = await Note.find({
-    publicationStatus: "private",
+    publicationStatus: includePublished
+      ? { $in: ["private", "published"] }
+      : "private",
     ocrStatus: "failed",
   })
     .select(
-      "_id title ocrStatus ocrError approvalDecision verificationStatus verificationError humanReviewReason",
+    "_id title publicationStatus ocrStatus ocrError approvalDecision verificationStatus verificationError humanReviewReason",
     )
     .sort({ createdAt: 1 })
     .lean();
@@ -32,6 +35,19 @@ try {
     })
       .select("_id status attempts")
       .lean();
+
+    if (note.publicationStatus === "published") {
+      if (includePublished && ocrJob) {
+        retryable.push({
+          id: note._id.toString(),
+          title: note.title,
+          publicationStatus: "published",
+          ocrError: note.ocrError,
+          ocrAttempts: ocrJob.attempts,
+        });
+      }
+      continue;
+    }
 
     if (
       ocrJob &&
@@ -59,9 +75,10 @@ try {
         mode: apply ? "apply" : "dry-run",
         matchedNotes: notes.length,
         retryableNotes: retryable.map(
-          ({ id, title, ocrAttempts, verificationJobStatus }) => ({
+          ({ id, title, publicationStatus, ocrAttempts, verificationJobStatus }) => ({
             id,
             title,
+            publicationStatus: publicationStatus ?? "private",
             ocrAttempts,
             verificationJobStatus,
           }),
@@ -77,6 +94,50 @@ try {
   } else {
     for (const note of retryable) {
       const noteId = new mongoose.Types.ObjectId(note.id);
+      if (note.publicationStatus === "published") {
+        const updatedNote = await Note.updateOne(
+          {
+            _id: noteId,
+            publicationStatus: "published",
+            ocrStatus: "failed",
+          },
+          {
+            $set: { ocrStatus: "queued" },
+            $unset: { ocrError: "" },
+          },
+        );
+        if (updatedNote.modifiedCount !== 1) {
+          throw new Error(`Could not requeue published note OCR ${note.id}.`);
+        }
+
+        const ocrJob = await NoteOcrJob.updateOne(
+          { note: noteId, status: "failed" },
+          {
+            $set: {
+              status: "queued",
+              attempts: 0,
+              retryAt: null,
+              leaseAt: null,
+              lastError: "",
+            },
+          },
+        );
+        if (ocrJob.modifiedCount !== 1) {
+          await Note.updateOne(
+            { _id: noteId, publicationStatus: "published", ocrStatus: "queued" },
+            {
+              $set: {
+                ocrStatus: "failed",
+                ...(note.ocrError ? { ocrError: note.ocrError } : {}),
+              },
+              ...(!note.ocrError ? { $unset: { ocrError: "" } } : {}),
+            },
+          );
+          throw new Error(`Could not reset OCR job for published note ${note.id}.`);
+        }
+        continue;
+      }
+
       const updatedNote = await Note.updateOne(
         {
           _id: noteId,

@@ -4,6 +4,7 @@ import { useGSAP } from "@gsap/react";
 import {
   BookOpenText,
   Compass,
+  Sparkles,
   LayoutDashboard,
   LibraryBig,
   LogOut,
@@ -119,6 +120,7 @@ export function AuthenticatedSiteHeader({ user }) {
             <>
               <NavLink className={navLinkClass} to="/search"><Compass aria-hidden="true" />Explore</NavLink>
               <NavLink className={navLinkClass} to="/uploads"><Upload aria-hidden="true" />Upload</NavLink>
+              <NavLink className={navLinkClass} to="/practice"><Sparkles aria-hidden="true" />AI Practice</NavLink>
               <NavLink className={navLinkClass} to="/syllabus"><BookOpenText aria-hidden="true" />Syllabus analyzer</NavLink>
               {user.username && (
                 <NavLink className={navLinkClass} to={`/profile/${encodeURIComponent(user.username)}`}>

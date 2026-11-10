@@ -8,12 +8,14 @@ import {
   FileText,
   RotateCcw,
   Search,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
 import {
   subscribeResourceOptionsUpdated,
 } from "../lib/resource-options.js";
+import useResponsiveFilters from "../lib/useResponsiveFilters.js";
 import { usePageMotion } from "../lib/usePageMotion.js";
 import AdUnit from "../components/AdUnit.jsx";
 import { EmptyState, PageLoader } from "../components/PageState.jsx";
@@ -100,6 +102,7 @@ export default function ResourceSearchPage() {
   const { user } = useAuth();
   const rootRef = useRef(null);
   const [activeTab, setActiveTab] = useState("note");
+  const [filtersOpen, setFiltersOpen] = useResponsiveFilters();
   const [noteDraft, setNoteDraft] = useState(emptyNoteFilters);
   const [pyqDraft, setPyqDraft] = useState(emptyPyqFilters);
   const [appliedFilters, setAppliedFilters] = useState({
@@ -167,19 +170,20 @@ export default function ResourceSearchPage() {
     };
     void loadOptions();
     const refreshSearch = () => setSearchRefresh((current) => current + 1);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      void loadOptions();
+      refreshSearch();
+    };
     const unsubscribe = subscribeResourceOptionsUpdated(() => {
       void loadOptions();
       refreshSearch();
     });
-    const refreshTimer = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      void loadOptions();
-      refreshSearch();
-    }, 10_000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
       active = false;
       unsubscribe();
-      window.clearInterval(refreshTimer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, []);
 
@@ -355,13 +359,24 @@ export default function ResourceSearchPage() {
 
   return (
     <main className="ed-resource-search-page ed-explore-page min-h-screen bg-slate-50" ref={rootRef}>
-      <section className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
-        <header className="ed-explore-hero mb-6 rounded-3xl border border-orange-100 bg-gradient-to-br from-white via-white to-orange-50 px-5 py-7 shadow-sm sm:mb-8 sm:px-8 sm:py-9" data-motion-intro>
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand sm:text-sm">The Topper resource library</p>
+      <section className="mx-auto  max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
+        <header className="ed-explore-hero   mb-6 rounded-3xl border border-orange-100 bg-gradient-to-br from-white via-white to-orange-50 px-5 py-7 shadow-sm sm:mb-8 sm:px-8 sm:py-9" data-motion-intro>
+          <p className="text-xs  font-bold uppercase tracking-[0.16em] text-brand sm:text-sm">The Topper resource library</p>
           <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Find your next study resource</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
             Explore student notes and previous-year question papers. AI verification results are shown separately from publication.
           </p>
+          <svg aria-hidden="true" className="ed-explore-hero-art" viewBox="0 0 180 150" fill="none">
+            <circle className="ed-explore-hero-orbit" cx="91" cy="76" r="57" />
+            <g className="ed-explore-hero-float">
+              <path d="M47 48.5c13-6 26-5 39 2v53c-13-7-26-8-39-2v-53Z" />
+              <path d="M133 48.5c-13-6-26-5-39 2v53c13-7 26-8 39-2v-53Z" />
+              <path d="M90 51v55" />
+              <path d="M57 61c7-2 14-1 20 2M57 72c7-2 14-1 20 2M123 61c-7-2-14-1-20 2M123 72c-7-2-14-1-20 2" />
+            </g>
+            <path className="ed-explore-hero-spark" d="m137 24 3.5 9.5L150 37l-9.5 3.5L137 50l-3.5-9.5L124 37l9.5-3.5L137 24Z" />
+            <circle className="ed-explore-hero-dot" cx="42" cy="105" r="5" />
+          </svg>
         </header>
 
         <div className="ed-explore-tabs mb-5 grid grid-cols-2 gap-2 rounded-2xl border border-orange-100 bg-white p-2 shadow-sm" role="tablist" aria-label="Resource search type" data-motion-intro>
@@ -382,12 +397,21 @@ export default function ResourceSearchPage() {
             role="tab"
             type="button"
           >
-            <ClipboardList aria-hidden="true" size={18} />
+            <ClipboardList aria-hidden="true" className="shrink-0" size={18} />
             Find Question Papers
           </button>
         </div>
 
-        <form className="ed-explore-filters mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6" onSubmit={applyFilters} role="tabpanel" data-motion-intro>
+        <details
+          className="ed-responsive-filter-disclosure mb-6"
+          onToggle={(event) => setFiltersOpen(event.currentTarget.open)}
+          open={filtersOpen}
+        >
+          <summary className="ed-responsive-filter-summary">
+            <SlidersHorizontal aria-hidden="true" size={17} />
+            <span>{filtersOpen ? "Hide filters" : "Show filters"}</span>
+          </summary>
+          <form className="ed-explore-filters rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6" onSubmit={applyFilters} role="tabpanel" data-motion-intro>
           <div className="mb-4 flex items-center gap-2">
             {activeTab === "note" ? (
               <BookOpen aria-hidden="true" className="text-brand" size={20} />
@@ -554,7 +578,8 @@ export default function ResourceSearchPage() {
               Filters update from uploads. OCR and AI verification status never hide a published resource.
             </span>
           </div>
-        </form>
+          </form>
+        </details>
 
         <section className="ed-explore-results" aria-label={activeTab === "note" ? "Notes search results" : "Question paper search results"}>
           <AdUnit className="mb-5" placement="search" />
@@ -589,9 +614,18 @@ export default function ResourceSearchPage() {
                     )}
                     <div className={`ed-explore-card-content relative z-10 flex min-h-full flex-col p-4 sm:p-5 ${resource.type === "note" ? "min-h-[550px]" : ""}`}>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="ed-explore-badge rounded-lg border border-orange-200/80 bg-white/80 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-brand shadow-sm backdrop-blur-md">
-                        {resource.type === "note" ? "Student notes" : "Question paper"}
-                      </span>
+                      {resource.uploader?.username ? (
+                        <Link
+                          className="ed-explore-badge rounded-lg border border-orange-200/80 bg-white/80 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-brand shadow-sm backdrop-blur-md hover:underline"
+                          to={`/profile/${encodeURIComponent(resource.uploader.username)}`}
+                        >
+                          {resource.uploader.fullName || "Uploader unavailable"}
+                        </Link>
+                      ) : (
+                        <span className="ed-explore-badge rounded-lg border border-orange-200/80 bg-white/80 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-brand shadow-sm backdrop-blur-md">
+                          {resource.uploader?.fullName || "Uploader unavailable"}
+                        </span>
+                      )}
                       <span className="ed-explore-format rounded-lg border border-white/80 bg-white/75 px-2.5 py-1 text-xs font-bold uppercase text-slate-600 shadow-sm backdrop-blur-md">{resource.fileFormat?.toUpperCase()}</span>
                     </div>
                     <h3 className="ed-explore-card-title mt-4 break-words text-lg font-bold text-ink">{resource.title}</h3>
@@ -615,14 +649,9 @@ export default function ResourceSearchPage() {
                         </>
                       )}
                     </dl>
-                    {resource.uploader?.username && (
-                      <Link className="mt-2 w-fit text-xs font-semibold text-brand hover:underline" to={`/profile/${encodeURIComponent(resource.uploader.username)}`}>
-                        Shared by {resource.uploader.fullName}
-                      </Link>
-                    )}
                     {resource.type === "pyq" && (
                       <p className="mt-2 text-xs text-slate-500">
-                        {[resource.department, resource.college, resource.uploader?.fullName && `Uploaded by ${resource.uploader.fullName}`].filter(Boolean).join(" · ")}
+                        {[resource.department, resource.college].filter(Boolean).join(" · ")}
                       </p>
                     )}
                     <p className="mt-2 text-xs font-medium text-slate-600">{new Date(resource.createdAt).toLocaleDateString()} · {resource.helpfulCount} found helpful</p>

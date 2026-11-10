@@ -31,6 +31,7 @@ import {
 
 const EduRiseLanding = lazy(() => import("./components/EduRiseLanding.jsx"));
 const ResourceViewerPage = lazy(() => import("./pages/ResourceViewerPage.jsx"));
+const AiPracticePage = lazy(() => import("./pages/AiPracticePage.jsx"));
 
 export default function App() {
   useEffect(() => {
@@ -71,6 +72,16 @@ export default function App() {
         <Route path="/advertising" element={<AdvertisingDisclosurePage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/library" element={<ProtectedPage><LibraryPage /></ProtectedPage>} />
+        <Route
+          path="/practice"
+          element={(
+            <ProtectedPage>
+              <BrandedSuspense label="Preparing your AI practice session…">
+                <AiPracticePage />
+              </BrandedSuspense>
+            </ProtectedPage>
+          )}
+        />
         <Route path="/uploads" element={<ProtectedPage><UploadPage /></ProtectedPage>} />
         <Route path="/upload" element={<ProtectedPage><UploadPage /></ProtectedPage>} />
         <Route path="/notifications" element={<AuthenticatedPage><NotificationsPage /></AuthenticatedPage>} />

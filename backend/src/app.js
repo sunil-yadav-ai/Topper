@@ -18,6 +18,7 @@ import notificationsRouter from "./routes/notifications.routes.js";
 import profileRouter from "./routes/profile.routes.js";
 import learningTutorRouter from "./routes/learning-tutor.routes.js";
 import learningActivityRouter from "./routes/learning-activity.routes.js";
+import aiPracticeRouter from "./routes/ai-practice.routes.js";
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.use(
       "Content-Range",
       "X-Resource-Format",
       "X-Resource-Name",
+      "X-Resource-Uploader",
     ],
     origin(origin, callback) {
       callback(null, !origin || isAllowedCorsOrigin(origin));
@@ -56,6 +58,7 @@ app.use("/api/notifications", notificationsRouter);
 app.use("/api/profiles", profileRouter);
 app.use("/api/learning-tutor", learningTutorRouter);
 app.use("/api/learning-activity", learningActivityRouter);
+app.use("/api/ai-practice", aiPracticeRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
 

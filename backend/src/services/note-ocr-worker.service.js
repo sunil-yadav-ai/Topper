@@ -243,7 +243,7 @@ async function processNextOcrJob() {
     const quotaUnavailable = error.retryableRateLimit === false;
     const exhausted = shouldExhaustOcrJob(error, job.attempts);
     const message = quotaUnavailable
-      ? "Text extraction is unavailable because the AI provider quota is exhausted. Contact support."
+      ? "Text extraction stopped because the OpenAI API account has no remaining quota. Restore API billing, then requeue this note's OCR."
       : exhausted
         ? "Text extraction failed after several attempts. Your original note is unchanged."
         : "Text extraction failed temporarily and will be retried.";

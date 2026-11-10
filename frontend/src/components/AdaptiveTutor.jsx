@@ -31,6 +31,16 @@ function getErrorMessage(error) {
   return error.response?.data?.message ?? error.message ?? "The tutor request failed.";
 }
 
+function getUnavailableMessage(message) {
+  if (
+    message ===
+    "We could not read text from this note, so the tutor cannot safely ask note-based questions."
+  ) {
+    return "Text extraction failed because the OpenAI API quota for this note is exhausted. Restore API billing, requeue the note's OCR, then refresh this page.";
+  }
+  return message || "Text extraction must finish before the AI tutor can use this note.";
+}
+
 function getCurrentQuestion(session) {
   return [...(session?.questions ?? [])]
     .reverse()
@@ -240,7 +250,9 @@ export default function AdaptiveTutor({ noteId, resourceType }) {
             </p>
           </div>
           {history?.available === false ? (
-            <p className="ed-tutor-unavailable" role="status">{history.unavailableMessage}</p>
+            <p className="ed-tutor-unavailable" role="status">
+              {getUnavailableMessage(history.unavailableMessage)}
+            </p>
           ) : (
             <button
               className="ed-tutor-primary"

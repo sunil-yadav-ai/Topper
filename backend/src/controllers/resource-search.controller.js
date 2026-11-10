@@ -64,7 +64,7 @@ export async function viewResource(request, response) {
   }
 
   const Model = resourceType === "note" ? Note : Pyq;
-  const resource = await Model.findById(resourceId);
+  const resource = await Model.findById(resourceId).populate("uploadedBy", "fullName");
   if (!resource) {
     const error = new Error("Resource not found.");
     error.statusCode = 404;
@@ -93,6 +93,7 @@ export async function viewResource(request, response) {
       : getPyqFileUrl(resource.storage),
     format: resource.storage.format ?? "pdf",
     fileName: resource.fileName,
+    uploaderName: resource.uploadedBy?.fullName ?? "",
   });
 }
 

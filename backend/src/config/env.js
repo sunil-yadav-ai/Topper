@@ -12,7 +12,7 @@ export const env = {
     process.env.MONGODB_URI ??
     "mongodb://127.0.0.1:27017/student_resource_sharing",
   corsOrigins: (process.env.CORS_ORIGIN ??
-    "http://localhost:5173,http://127.0.0.1:5173")
+    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:5175,http://127.0.0.1:5175")
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean),
@@ -79,16 +79,31 @@ export function isAllowedCorsOrigin(origin, allowedOrigins = env.corsOrigins) {
   } catch {
     return false;
   }
-  if (!["localhost", "127.0.0.1"].includes(requested.hostname)) {
+
+  const loopbackHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
+  if (!loopbackHosts.has(requested.hostname)) {
     return false;
   }
 
-  const alias = requested.hostname === "localhost" ? "127.0.0.1" : "localhost";
+  if (
+    process.env.NODE_ENV !== "production" &&
+    requested.protocol === "http:" &&
+    Number(requested.port) >= 5173 &&
+    Number(requested.port) <= 5199
+  ) {
+    return true;
+  }
+
+  const aliases = {
+    localhost: new Set(["localhost", "127.0.0.1", "[::1]"]),
+    "127.0.0.1": new Set(["localhost", "127.0.0.1", "[::1]"]),
+    "[::1]": new Set(["localhost", "127.0.0.1", "[::1]"]),
+  };
   return allowedOrigins.some((allowedOrigin) => {
     try {
       const allowed = new URL(allowedOrigin);
       return (
-        allowed.hostname === alias &&
+        aliases[requested.hostname].has(allowed.hostname) &&
         allowed.protocol === requested.protocol &&
         allowed.port === requested.port
       );

@@ -133,6 +133,13 @@ database readiness. Use `npm run build` to build the frontend.
   Results are encrypted separately in MongoDB and are available only to the
   owner at `GET /api/notes/:noteId/verification`. Review never edits notes or
   publishes them.
+- If OCR stops because the OpenAI API account has exhausted its quota, restore
+  API billing for the key configured in `backend/.env`, then run
+  `npm run retry-failed-note-ocr --workspace=backend -- --include-published --apply`.
+  This requeues failed OCR for published notes without changing their
+  publication or verification state. The AI tutor also uses the OpenAI API, so
+  tutor questions and answer feedback remain unavailable until API access is
+  restored.
 - Automatic decisions use only confirmed-error counts divided by the number
   of verifiable statements. Up to and including 5% is `APPROVED`; above 5%
   through 10% is `APPROVED_WITH_WARNING`; above 10% is `REJECTED`. Uncertain
@@ -226,6 +233,29 @@ database readiness. Use `npm run build` to build the frontend.
   Configure `OPENAI_API_KEY` and `OCR_ENCRYPTION_KEY`;
   `OPENAI_SYLLABUS_MODEL` selects the model and defaults to `OPENAI_OCR_MODEL`
   or `gpt-4.1-mini`.
+
+## AI Practice
+
+- Authenticated students can start an adaptive tutor session at `/practice`.
+  Department, course, semester, subject, and optional topic choices come from
+  the student profile, accessible note and previous-paper metadata, and the
+  student's confirmed syllabus outline; subject names are not seeded in the
+  frontend.
+- Questions are generated one at a time from readable OCR text in accessible,
+  completed notes. A session cannot start without readable source material.
+  The backend reuses the configured OpenAI tutor model and structured-output
+  service; API credentials remain server-side, and question answers are
+  checked against source text before they are shown.
+- Correct answers increase difficulty one step. Incorrect answers lower the
+  next question by one step and reinforce the same concept; subsequent correct
+  answers can restore the prior challenge. Free-text answers are evaluated
+  semantically, while multiple-choice and true/false answers are checked
+  against their generated answer keys.
+- Practice records are stored per student in MongoDB, including questions,
+  answers, outcomes, difficulty changes, concept mastery, score, and duration.
+  The page includes session controls, a performance report, and saved history.
+- `/api/ai-practice` exposes authenticated options, history, session start,
+  answer, hint, explain, next-question, and end-session routes.
 
 ## Community note fact-checking
 

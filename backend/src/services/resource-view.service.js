@@ -18,6 +18,7 @@ export async function streamResourceView(request, response, {
   url,
   format,
   fileName,
+  uploaderName,
 }) {
   const range = request.get("range");
   if (range && !/^bytes=(?:\d+-\d*|-\d+)$/.test(range)) {
@@ -41,6 +42,9 @@ export async function streamResourceView(request, response, {
   }
 
   const safeName = fileName.replace(/[^\x20-\x7e]|[\r\n"\\]/g, "_");
+  const safeUploaderName = encodeURIComponent(
+    String(uploaderName ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, 100),
+  );
   response.status(upstream.status);
   response.set({
     "Accept-Ranges": "bytes",
@@ -51,6 +55,7 @@ export async function streamResourceView(request, response, {
     "Referrer-Policy": "no-referrer",
     "X-Resource-Format": format,
     "X-Resource-Name": safeName,
+    "X-Resource-Uploader": safeUploaderName,
     "X-Content-Type-Options": "nosniff",
   });
   for (const header of ["content-range", "content-length"]) {

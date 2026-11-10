@@ -89,7 +89,7 @@ function outputText(payload) {
     .find((item) => item.type === "output_text")?.text;
 }
 
-async function requestStructuredOutput({ instructions, input, name, schema, maxOutputTokens = 900 }) {
+export async function requestStructuredOutput({ instructions, input, name, schema, maxOutputTokens = 900 }) {
   if (!env.openAiApiKey) {
     throw tutorError("The AI tutor is not configured yet. Please contact an administrator.", 503);
   }
@@ -126,12 +126,26 @@ async function requestStructuredOutput({ instructions, input, name, schema, maxO
   }
 
   if (!response.ok) {
+    let providerError = null;
+    if (response.status === 429) {
+      try {
+        providerError = (await response.json()).error;
+      } catch {
+        providerError = null;
+      }
+    }
+    const isQuotaExhausted = providerError?.code === "insufficient_quota" ||
+      providerError?.type === "insufficient_quota";
     const message = response.status === 401 || response.status === 403
       ? "The AI tutor is not authorized. Please contact an administrator."
       : response.status === 429
-        ? "The AI tutor is temporarily at its usage limit. Please try again later."
+        ? isQuotaExhausted
+          ? "AI Practice is unavailable because the OpenAI API account has no remaining quota. An administrator must restore API billing or increase the project's usage limit."
+          : "The AI service is receiving requests too quickly. Please wait a moment and try again."
         : "The AI tutor is temporarily unavailable. Please try again.";
-    throw tutorError(message, response.status === 429 ? 503 : 502);
+    const error = tutorError(message, response.status === 429 ? 503 : 502);
+    if (response.status === 429) error.expose = true;
+    throw error;
   }
 
   let payload;
@@ -192,7 +206,8 @@ async function getLearningSource(note) {
       message: note.ocrStatus === "processing" || note.ocrStatus === "queued"
         ? "The note is still being read. Try the AI tutor again when its text extraction is complete."
         : note.ocrStatus === "failed"
-          ? "We could not read text from this note, so the tutor cannot safely ask note-based questions."
+          ? note.ocrError ||
+            "Text extraction failed. Check the note's OCR status and API billing before starting the tutor again."
           : "This note does not have readable extracted text yet, so the tutor cannot safely ask note-based questions.",
     };
   }
