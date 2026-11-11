@@ -27,16 +27,79 @@ workflows.
    `http://localhost:5000/api`.
 5. Configure `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and
    `CLOUDINARY_API_SECRET` in `backend/.env` to enable private note uploads.
-6. Configure `OPENAI_API_KEY` for vision OCR, and set `OCR_ENCRYPTION_KEY` to a
-   new random 32-byte base64 or 64-character hexadecimal key. Generate a base64
-   key with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.
-7. Set `MIN_VERIFIABLE_STATEMENTS` if the default minimum of five should change.
-8. Run `npm install` from the repository root.
-9. Run `npm run dev` to start the API and frontend together.
+6. Create a Gemini API key in
+   [Google AI Studio](https://aistudio.google.com/app/apikey) and set
+   `GEMINI_API_KEY` in `backend/.env`. The key and all Gemini requests stay on
+   the backend. The example uses the stable `gemini-3.5-flash-lite` model for
+   OCR, syllabus analysis, verification, and tutoring; each feature can use a
+   different supported model through its `GEMINI_*_MODEL` setting.
+7. Set `OCR_ENCRYPTION_KEY` to a new random 32-byte base64 or 64-character
+   hexadecimal key. Generate a base64 key with
+   `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.
+   Preserve an existing key so previously encrypted OCR and syllabus records
+   remain readable.
+8. Set `MIN_VERIFIABLE_STATEMENTS` if the default minimum of five should change.
+   The configurable `GEMINI_USER_DAILY_REQUEST_LIMIT` and
+   `GEMINI_USER_MINUTE_REQUEST_LIMIT` defaults limit each student's Gemini API
+   requests and are tracked atomically in MongoDB across backend instances.
+   Review your active Google AI Studio project quotas; Gemini Free Tier is not
+   unlimited.
+9. Run `npm install` from the repository root.
+10. Run `npm run dev` to start the API and frontend together.
 
 The frontend is served by Vite at `http://localhost:5173`. The API listens at
 `http://localhost:5000`; its `GET /api/health` endpoint reports server and
 database readiness. Use `npm run build` to build the frontend.
+
+## Frontend loading behavior
+
+- The existing full-screen intro runs once when the app document loads and
+  stores its completion in `sessionStorage`. Internal route changes and auth
+  updates do not replay it; refreshing or opening a new tab starts a new intro.
+- Lazy route transitions use the existing Topper logo loader instead of the
+  full-screen intro. API `GET` requests share a delayed, non-blocking logo
+  indicator that stays visible until all tracked requests succeed or fail.
+- Loading animations respect `prefers-reduced-motion`, and request errors are
+  left to the page's existing error handling rather than leaving a loader active.
+- Run `npm test --workspace=frontend` to test API request loading aggregation.
+
+## Search engine optimization
+
+- The frontend uses React 19, Vite, and React Router; the Express/Mongoose API
+  provides server-rendered, crawlable HTML for public resource, subject, and
+  topic URLs. Vite proxies `/robots.txt`, `/sitemap.xml`, `/notes`,
+  `/question-papers`, and `/subjects` to the API during local development and
+  preview.
+- Set `FRONTEND_URL` to the public frontend origin (scheme and host, without a
+  path) in the backend environment. It is used for canonical links and sitemap
+  entries. The sitemap includes the home, question-paper, legal, sufficiently
+  populated subject/topic, and published resource pages. Sitemap entries are
+  queried from MongoDB when connected and refresh on request; the public
+  resource endpoints cache briefly.
+- Production hosting must route `/robots.txt`, `/sitemap.xml`, `/notes/*`,
+  `/question-papers/*`, `/subjects`, and `/subjects/*` from the frontend
+  hostname to the Express service before applying the SPA fallback. Preserve
+  the backend's HTTP status and `Location` headers so unknown resources return
+  404 and outdated resource slugs return 301. Keep `/api/*` routed to the API
+  as configured by `VITE_API_BASE_URL`. Without these host rewrites, static
+  Vite hosting will return the SPA shell instead of dynamic sitemap or
+  server-rendered resource HTML.
+- Public resource pages read only published records with an explicit
+  `visibility: "public"` value. Private, unpublished, unlisted, or legacy
+  records without explicit public visibility are excluded. Pages expose
+  resource metadata, not secure-storage URLs, uploader names, or student
+  account data; opening the underlying file continues to require sign-in.
+- `/search` and account, authentication, admin, profile, library, upload,
+  notification, practice, syllabus, and authenticated resource-view pages are
+  excluded from indexing. Search output pages canonicalize to the clean path;
+  search itself is not included in the sitemap.
+- To submit the sitemap, add and verify the production site in Google Search
+  Console using the Domain DNS or URL-prefix HTML/file/DNS verification method
+  available for your deployment. Then submit
+  `https://YOUR_PUBLIC_DOMAIN/sitemap.xml` under **Sitemaps**. Check
+  `https://YOUR_PUBLIC_DOMAIN/robots.txt`, use URL Inspection for important
+  public pages, and resolve reported crawl/indexing issues. Submitting a
+  sitemap does not guarantee indexing.
 
 ## Authentication
 
@@ -113,19 +176,20 @@ database readiness. Use `npm run build` to build the frontend.
   actual verification decision is retained and never changed to make the note
   public.
 - A separate MongoDB-backed OCR worker splits PDFs into individual pages and
-  sends each page (or each uploaded image) to the OpenAI Responses vision API.
+  sends each page (or each uploaded image) to Gemini through Google's official
+  `@google/genai` SDK.
   It stores each page number, transcription, formulas, readability,
   confidence, and unclear regions in an AES-256-GCM encrypted MongoDB result.
   `GET /api/notes/:noteId/ocr` returns the decrypted structured result only to
   the note owner. OCR retries failures up to three times, records processing
   state, and never treats unclear handwriting as incorrect. Set
-  `OPENAI_OCR_MODEL` to choose another compatible vision model; OCR is not
-  available until both the provider key and encryption key are configured.
+  `GEMINI_OCR_MODEL` to choose another supported multimodal model; OCR is not
+  available until both the Gemini key and encryption key are configured.
 - The worker then checks definitions, formulas, calculations, factual claims,
   explanations, contradictions, materially missing calculation steps, and
-  subject relevance using the separate academic verification service and
-  OpenAI web search. `ACADEMIC_REFERENCE_DOMAINS` controls allowed academic
-  reference domains; `OPENAI_VERIFICATION_MODEL` selects the review model.
+  subject relevance using the separate academic verification service.
+  `ACADEMIC_REFERENCE_DOMAINS` controls which grounded citation domains can be
+  used; `GEMINI_VERIFICATION_MODEL` selects the review model.
   Every finding includes the original statement, page, category, explanation,
   suggested correction, confidence, and cited verification evidence. A
   finding is `CONFIRMED_ERROR` only when its statement matches the OCR and it
@@ -133,13 +197,21 @@ database readiness. Use `npm run build` to build the frontend.
   Results are encrypted separately in MongoDB and are available only to the
   owner at `GET /api/notes/:noteId/verification`. Review never edits notes or
   publishes them.
-- If OCR stops because the OpenAI API account has exhausted its quota, restore
-  API billing for the key configured in `backend/.env`, then run
+- Gemini quota and user limits stop processing without retrying requests that
+  cannot succeed. After the applicable project quota or user limit resets, run
   `npm run retry-failed-note-ocr --workspace=backend -- --include-published --apply`.
   This requeues failed OCR for published notes without changing their
-  publication or verification state. The AI tutor also uses the OpenAI API, so
-  tutor questions and answer feedback remain unavailable until API access is
-  restored.
+  publication or verification state. The same Gemini service powers the
+  syllabus analyzer, verification, AI Practice, and the note tutor.
+- Google Search grounding is disabled by default because Google's current
+  pricing documentation marks it unavailable on the Gemini Free Tier for
+  Gemini 3.5 Flash-Lite. In Free Tier mode the verifier still validates OCR
+  provenance and produces a report, but cannot confirm factual errors without
+  grounded citations; those findings remain `UNCERTAIN`. To enable grounded
+  citations, use an eligible paid project and explicitly set
+  `GEMINI_VERIFICATION_USE_GOOGLE_SEARCH=true`; search grounding has separate
+  project quotas and may incur charges. Never treat model-generated URLs as
+  citations unless they are present in Gemini's grounding metadata.
 - Automatic decisions use only confirmed-error counts divided by the number
   of verifiable statements. Up to and including 5% is `APPROVED`; above 5%
   through 10% is `APPROVED_WITH_WARNING`; above 10% is `REJECTED`. Uncertain
@@ -212,7 +284,8 @@ database readiness. Use `npm run build` to build the frontend.
 - Verified students can upload a PDF, JPG/JPEG, or PNG syllabus (up to 10 MB)
   at `/syllabus`. PDFs are limited to 50 pages. Text-based PDF pages are
   extracted directly; sparse, scanned, or image-containing pages and uploaded
-  images use the configured OpenAI vision model. Every page is accounted for.
+  images use the configured Gemini multimodal model. Every page is accounted
+  for.
 - The backend organizes source-listed course, semester, subjects, codes, unit
   numbers, topics, and subtopics in bounded text chunks. OCR text and the
   outline are encrypted in MongoDB with `OCR_ENCRYPTION_KEY`; records are
@@ -230,9 +303,8 @@ database readiness. Use `npm run build` to build the frontend.
   come from actual database records; no placeholder resources are generated.
 - APIs under `/api/syllabus-analyses` provide upload, owner-scoped list/detail,
   correction, source-grounded regeneration, and confirmation/resource matching.
-  Configure `OPENAI_API_KEY` and `OCR_ENCRYPTION_KEY`;
-  `OPENAI_SYLLABUS_MODEL` selects the model and defaults to `OPENAI_OCR_MODEL`
-  or `gpt-4.1-mini`.
+  Configure `GEMINI_API_KEY` and `OCR_ENCRYPTION_KEY`;
+  `GEMINI_SYLLABUS_MODEL` selects the syllabus model.
 
 ## AI Practice
 
@@ -243,7 +315,7 @@ database readiness. Use `npm run build` to build the frontend.
   frontend.
 - Questions are generated one at a time from readable OCR text in accessible,
   completed notes. A session cannot start without readable source material.
-  The backend reuses the configured OpenAI tutor model and structured-output
+  The backend reuses the configured Gemini tutor model and structured-output
   service; API credentials remain server-side, and question answers are
   checked against source text before they are shown.
 - Correct answers increase difficulty one step. Incorrect answers lower the
@@ -256,6 +328,30 @@ database readiness. Use `npm run build` to build the frontend.
   The page includes session controls, a performance report, and saved history.
 - `/api/ai-practice` exposes authenticated options, history, session start,
   answer, hint, explain, next-question, and end-session routes.
+
+## Gemini validation and deployment
+
+- Run the four feature suites with
+  `npm run test --workspace=backend -- src/services/note-ocr.service.test.js src/services/syllabus-analysis.service.test.js src/services/note-verification.service.test.js src/services/ai-practice.service.test.js src/services/learning-tutor.service.test.js`.
+  These tests use mocked Gemini responses; they do not prove that a live Google
+  API key, project quota, or production network path is valid.
+- For a live smoke test, configure a backend-only `GEMINI_API_KEY`, supported
+  model IDs, MongoDB, and `OCR_ENCRYPTION_KEY`, then exercise a small image/PDF
+  note upload, syllabus upload, note verification, and `/practice` with an
+  authenticated test account. Do not upload student documents to test accounts
+  without consent.
+- In deployment, set the Gemini variables only on the backend service, keep
+  `GEMINI_API_KEY` out of Vite/frontend environment variables, configure the
+  production MongoDB connection and existing Cloudinary credentials, and
+  preserve the existing `OCR_ENCRYPTION_KEY`. Review Google AI Studio quotas
+  and usage before making the API public; the Free Tier has finite per-project
+  limits and can be exhausted by multiple students.
+- The selected model's [Gemini API pricing and data-use terms](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-flash-lite)
+  currently indicate that Free Tier prompts and responses may be used to
+  improve Google's products. Obtain appropriate disclosure/consent, do not send
+  student names, contact details, account data, or other unnecessary personal
+  information, and assess whether your deployment's document privacy needs
+  require a paid tier with different data-use terms.
 
 ## Community note fact-checking
 

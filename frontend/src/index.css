@@ -285,6 +285,7 @@ progress {
   font-weight: 900;
 }
 
+.practice-field input,
 .practice-field select,
 .practice-question-card textarea {
   width: 100%;
@@ -294,11 +295,6 @@ progress {
   border-radius: .7rem;
   background: white;
   color: var(--practice-black);
-}
-
-.practice-field select:disabled {
-  color: #867d70;
-  background: #f0ede6;
 }
 
 .practice-source-note,
@@ -9858,6 +9854,47 @@ body {
   display: grid;
   min-height: 48px;
   place-items: center;
+  animation: ed-logo-loader-pulse 1.15s ease-in-out infinite;
+}
+
+.ed-api-page-loader {
+  position: fixed;
+  z-index: 1800;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  display: flex;
+  min-height: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid rgb(23 23 23 / 9%);
+  border-radius: 999px;
+  background: rgb(255 248 235 / 94%);
+  box-shadow: 0 8px 24px rgb(23 23 23 / 12%);
+  pointer-events: none;
+  transform: none;
+}
+
+.ed-api-page-loader .ed-loader-inline-logo {
+  min-height: 36px;
+}
+
+.ed-api-page-loader .ed-brand-mark {
+  width: 32px;
+  height: auto;
+}
+
+.ed-api-page-loader > span {
+  font-size: 12px;
+}
+
+.ed-route-pending {
+  min-height: 160px;
+}
+
+@keyframes ed-logo-loader-pulse {
+  0%, 100% { transform: scale(.96); }
+  50% { transform: scale(1.04); }
 }
 
 .ed-empty-illustration {
@@ -9923,6 +9960,10 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .ed-loader-progress-indicator {
     transform: translateX(0);
+  }
+
+  .ed-loader-inline-logo {
+    animation: none;
   }
 }
 
@@ -10025,6 +10066,19 @@ body {
   color: #504a3f;
   font-size: 12px;
   line-height: 1.6;
+}
+
+.ed-tutor-start {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 0 22px 18px;
+}
+
+.ed-tutor-start .ed-tutor-unavailable {
+  max-width: none;
+  margin: 0;
+  flex: 1;
 }
 
 .ed-tutor-primary,
@@ -10226,6 +10280,8 @@ body {
 
 .ed-tutor-choices button:hover:not(:disabled) { background: #eee8ff; }
 .ed-tutor-choices button[aria-pressed="true"] { background: #e2d9ff; }
+.ed-tutor-choices button.is-correct { background: #e8f7af; }
+.ed-tutor-choices button.is-incorrect { background: #ffe6d8; }
 .ed-tutor-choices button:disabled { cursor: default; opacity: .75; }
 
 .ed-tutor-choices button span {
@@ -10362,6 +10418,7 @@ body {
   .ed-tutor-heading h2 { font-size: 20px; }
   .ed-tutor-icon { width: 37px; height: 37px; }
   .ed-tutor-intro { align-items: stretch; flex-direction: column; gap: 13px; padding: 17px 15px; }
+  .ed-tutor-start { align-items: stretch; flex-direction: column; padding: 0 15px 15px; }
   .ed-tutor-primary { min-height: 42px; }
   .ed-tutor-history { padding: 0 15px 15px; }
   .ed-tutor-history-row { grid-template-columns: 1fr 1fr; gap: 4px 10px; }

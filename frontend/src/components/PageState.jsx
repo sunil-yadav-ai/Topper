@@ -1,6 +1,10 @@
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useGSAP } from "@gsap/react";
 import { gsap } from "../lib/gsap.js";
+import {
+  getPendingPageRequestCount,
+  subscribeToPageRequests,
+} from "../lib/page-request-tracker.js";
 import AnimatedIllustration from "./AnimatedIllustration.jsx";
 import FlyingStudentsMascot from "./FlyingStudentsMascot.jsx";
 import TopperLogo from "./TopperLogo.jsx";
@@ -12,6 +16,8 @@ export function PageLoader({
   fullScreen = false,
   exiting = false,
   onExitComplete,
+  onAnimationComplete,
+  className = "",
 }) {
   const rootRef = useRef(null);
 
@@ -32,9 +38,20 @@ export function PageLoader({
       return undefined;
     }
 
-    if (reduceMotion) return undefined;
+    if (reduceMotion) {
+      if (fullScreen && onAnimationComplete) {
+        const completion = gsap.delayedCall(0, onAnimationComplete);
+        return () => completion.kill();
+      }
+      return undefined;
+    }
 
-    const entrance = gsap.timeline({ defaults: { ease: "power3.out" } });
+    const entrance = gsap.timeline({
+      defaults: { ease: "power3.out" },
+      ...(fullScreen && onAnimationComplete
+        ? { onComplete: onAnimationComplete }
+        : {}),
+    });
     if (fullScreen) {
       entrance
         .fromTo(root.querySelector(".ed-loader-mascot"), { y: 14, scale: 0.94, autoAlpha: 0 }, { y: 0, scale: 1, autoAlpha: 1, duration: 0.6 })
@@ -57,14 +74,18 @@ export function PageLoader({
       });
     }
     return undefined;
-  }, { scope: rootRef, dependencies: [exiting, fullScreen, onExitComplete], revertOnUpdate: true });
+  }, {
+    scope: rootRef,
+    dependencies: [exiting, fullScreen, onAnimationComplete, onExitComplete],
+    revertOnUpdate: true,
+  });
 
   if (fullScreen) {
     return (
       <div
         aria-busy="true"
         aria-live="polite"
-        className="ed-page-loader ed-page-loader-fullscreen"
+        className={`ed-page-loader ed-page-loader-fullscreen ${className}`}
         ref={rootRef}
         role="status"
       >
@@ -81,30 +102,43 @@ export function PageLoader({
   }
 
   return (
-    <div aria-busy="true" aria-live="polite" className="ed-page-loader ed-page-loader-inline" ref={rootRef} role="status">
+    <div aria-busy="true" aria-live="polite" className={`ed-page-loader ed-page-loader-inline ${className}`} ref={rootRef} role="status">
       <div className="ed-loader-inline-logo"><TopperLogo loading /></div>
       <span>{label}</span>
     </div>
   );
 }
 
-export function useBrandedLoadingScreen(active, label) {
-  const [visible, setVisible] = useState(active);
-  const hide = useCallback(() => setVisible(false), []);
+function useDelayedVisibility(active, delay = 200) {
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (active) setVisible(true);
-  }, [active]);
+    if (!active) {
+      setVisible(false);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setVisible(true), delay);
+    return () => window.clearTimeout(timer);
+  }, [active, delay]);
+
+  return visible;
+}
+
+function DelayedRouteLoader({ label }) {
+  const visible = useDelayedVisibility(true);
+  return visible ? <PageLoader label={label} /> : <div aria-hidden="true" className="ed-route-pending" />;
+}
+
+export function ApiPageLoader() {
+  const requestCount = useSyncExternalStore(
+    subscribeToPageRequests,
+    getPendingPageRequestCount,
+    () => 0,
+  );
+  const visible = useDelayedVisibility(requestCount > 0);
 
   if (!visible) return null;
-  return (
-    <PageLoader
-      exiting={!active}
-      fullScreen
-      label={label}
-      onExitComplete={hide}
-    />
-  );
+  return <PageLoader className="ed-api-page-loader" label="Loading your page…" />;
 }
 
 export function EmptyState({ title, children, icon = "book", illustration, className = "" }) {
@@ -120,41 +154,10 @@ export function EmptyState({ title, children, icon = "book", illustration, class
   );
 }
 
-function SuspensePending({ onStart, onFinish }) {
-  useEffect(() => {
-    onStart();
-    return onFinish;
-  }, [onFinish, onStart]);
-  return null;
-}
-
-function SuspenseReady({ children, onReady }) {
-  useEffect(() => onReady(), [onReady]);
-  return children;
-}
-
 export function BrandedSuspense({ children, label = "Preparing your learning space…" }) {
-  const [phase, setPhase] = useState("idle");
-  const start = useCallback(() => setPhase("loading"), []);
-  const finish = useCallback(
-    () => setPhase((current) => (current === "loading" ? "exiting" : current)),
-    [],
-  );
-  const completeExit = useCallback(() => setPhase("idle"), []);
-
   return (
-    <>
-      <Suspense fallback={<SuspensePending onStart={start} onFinish={finish} />}>
-        <SuspenseReady onReady={finish}>{children}</SuspenseReady>
-      </Suspense>
-      {phase !== "idle" && (
-        <PageLoader
-          exiting={phase === "exiting"}
-          fullScreen
-          label={label}
-          onExitComplete={completeExit}
-        />
-      )}
-    </>
+    <Suspense fallback={<DelayedRouteLoader label={label} />}>
+      {children}
+    </Suspense>
   );
 }

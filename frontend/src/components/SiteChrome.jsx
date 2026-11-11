@@ -57,6 +57,8 @@ function PublicSiteHeader() {
         </button>
         <nav aria-label="Main navigation" className={`ed-nav ed-app-nav ${menuOpen ? "ed-nav-open" : ""}`}>
           <Link to="/search">Explore</Link>
+          <Link to="/subjects">Subjects</Link>
+          <Link to="/pyqs">Question papers</Link>
           <Link to="/login">Student sign in</Link>
           <Link className="ed-nav-cta" to="/register">
             Join for free
@@ -172,7 +174,7 @@ export function SiteFooter() {
             <span className="ed-footer-free">FREE TO LEARN · FREE TO SHARE</span>
           </div>
           <div className="ed-footer-links">
-            <div><h2>Explore</h2><Link to="/search">Knowledge vault</Link><Link to="/pyqs">Previous-year papers</Link><Link to="/syllabus">Syllabus explorer</Link></div>
+            <div><h2>Explore</h2><Link to="/search">Knowledge vault</Link><Link to="/subjects">Study subjects</Link><Link to="/pyqs">Previous-year papers</Link><Link to="/syllabus">Syllabus explorer</Link></div>
             <div><h2>Join in</h2><Link to="/register">Share your notes</Link><Link to="/login">Student sign in</Link><Link to="/library">Your library</Link></div>
             <div><h2>About</h2><Link to="/#about">Our story</Link><Link to="/#verification">Thoughtful verification</Link><Link to="/terms">Terms &amp; conditions</Link></div>
             <div><h2>Privacy</h2><Link to="/advertising">Privacy &amp; advertising details</Link>{validContactEmail ? <a href={`mailto:${validContactEmail}`}>Contact Topper</a> : <span className="ed-footer-coming-soon">Contact details coming soon</span>}</div>

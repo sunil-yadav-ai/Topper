@@ -9,7 +9,6 @@ import { decryptOcrResult } from "./note-ocr.service.js";
 
 const difficultyOrder = ["easy", "medium", "hard", "advanced"];
 const questionRevealDelayMs = 5_000;
-const answerWindowMs = 20_000;
 const sourceTextLimit = 22_000;
 const genericWords = new Set([
   "the", "and", "for", "with", "that", "this", "from", "into", "does", "what",
@@ -198,6 +197,7 @@ export function serializePracticeSession(session) {
     semester: session.semester,
     subject: session.subject,
     topic: session.topic,
+    answerTimeSeconds: session.answerTimeSeconds ?? 20,
     status: session.status,
     currentDifficulty: session.currentDifficulty,
     highestDifficulty: session.highestDifficulty,
@@ -313,7 +313,7 @@ function questionPrompt(session, source, difficulty, requestedConcept) {
   };
 }
 
-async function generateQuestion(session, source, difficulty, concept = "") {
+async function generateQuestion(session, source, difficulty, userId, concept = "") {
   const question = await requestStructuredOutput({
     instructions:
       "You are a careful, friendly personal teacher. Create exactly one new question relevant to the selected department and subject. " +
@@ -337,6 +337,8 @@ async function generateQuestion(session, source, difficulty, concept = "") {
     input: questionPrompt(session, source, difficulty, concept),
     name: "ai_practice_question",
     schema: questionSchema,
+    userId,
+    feature: "tutor",
   });
   validateQuestion(
     question,
@@ -387,9 +389,11 @@ function updateAccuracy(session) {
   session.accuracy = attempted ? Math.round((session.correctCount / attempted) * 100) : 0;
 }
 
-function setQuestionTiming(question, createdAt = Date.now()) {
+function setQuestionTiming(question, answerTimeSeconds = 20, createdAt = Date.now()) {
   question.optionsAvailableAt = new Date(createdAt + questionRevealDelayMs);
-  question.answerDeadlineAt = new Date(createdAt + questionRevealDelayMs + answerWindowMs);
+  question.answerDeadlineAt = new Date(
+    createdAt + questionRevealDelayMs + answerTimeSeconds * 1000,
+  );
   return question;
 }
 
@@ -422,6 +426,7 @@ function serializeHistorySession(session) {
     semester: session.semester,
     subject: session.subject,
     topic: session.topic,
+    answerTimeSeconds: session.answerTimeSeconds ?? 20,
     status: session.status,
     correctCount: session.correctCount,
     incorrectCount: session.incorrectCount,
@@ -529,21 +534,28 @@ export async function startPracticeSession({ user, selection }) {
   const subject = String(selection?.subject ?? "").trim();
   const topic = String(selection?.topic ?? "").trim();
   const semester = Number(selection?.semester) || Number(user.semester);
+  const answerTimeSeconds = Number(selection?.answerTimeSeconds ?? 20);
   if (
     !department || department.length > 120 ||
     course.length > 160 ||
     !subject || subject.length > 160 ||
     !Number.isInteger(semester) || semester < 1 || semester > 12 ||
-    topic.length > 240
+    topic.length > 240 ||
+    !Number.isInteger(answerTimeSeconds) ||
+    answerTimeSeconds < 5 ||
+    answerTimeSeconds > 120
   ) {
-    throw practiceError("Choose a department and subject. Your semester must be set in your profile.", 400);
+    throw practiceError("Choose a department and subject, set a valid semester, and choose an answer time between 5 and 120 seconds.", 400);
   }
   const syllabusStructures = await getSyllabusStructures(user._id, user.course, user.semester);
   const source = await getLearningSource(user._id, { department, course, semester, subject, topic }, syllabusStructures);
   if (!source.available) return source;
-  const selectionData = { department, course, semester, subject, topic };
+  const selectionData = { department, course, semester, subject, topic, answerTimeSeconds };
   const draft = { ...selectionData, questions: [], correctCount: 0, incorrectCount: 0, strongConcepts: [], weakConcepts: [] };
-  const firstQuestion = setQuestionTiming(await generateQuestion(draft, source, "easy"));
+  const firstQuestion = setQuestionTiming(
+    await generateQuestion(draft, source, "easy", user._id),
+    answerTimeSeconds,
+  );
   const session = await PracticeSession.create({
     student: user._id,
     ...selectionData,
@@ -700,6 +712,8 @@ export async function getPracticeHint({ sessionId, user }) {
       name: "ai_practice_hint",
       schema: textSchema,
       maxOutputTokens: 250,
+      userId: user._id,
+      feature: "tutor",
     });
     if (!nonEmpty(result?.text)) throw practiceError("AI Practice could not create a hint. Please try again.");
     question.hint = result.text.slice(0, 1000);
@@ -735,6 +749,8 @@ export async function explainPracticeQuestion({ sessionId, user }) {
       name: "ai_practice_explanation",
       schema: textSchema,
       maxOutputTokens: 350,
+      userId: user._id,
+      feature: "tutor",
     });
     if (!nonEmpty(result?.text)) throw practiceError("AI Practice could not create an explanation. Please try again.");
     question.explainAgain = result.text.slice(0, 1600);
@@ -761,7 +777,14 @@ export async function nextPracticeQuestion({ sessionId, user, questionId }) {
   const lastQuestion = session.questions.at(-1);
   const reinforceConcept = lastQuestion.isCorrect === false ? lastQuestion.concept : "";
   const nextQuestion = setQuestionTiming(
-    await generateQuestion(session, source, session.currentDifficulty, reinforceConcept),
+    await generateQuestion(
+      session,
+      source,
+      session.currentDifficulty,
+      user._id,
+      reinforceConcept,
+    ),
+    session.answerTimeSeconds ?? 20,
   );
   session.questions.push(nextQuestion);
   session.currentConcept = nextQuestion.concept;

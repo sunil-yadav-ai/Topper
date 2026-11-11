@@ -29,8 +29,9 @@ let workerStarted = false;
 let processing = false;
 
 export function shouldExhaustOcrJob(error, attempts) {
+  if (error.retryableRateLimit === true) return false;
   if (error.retryableRateLimit === false) return true;
-  return error.retryableRateLimit !== true && attempts >= maxAttempts;
+  return attempts >= maxAttempts;
 }
 
 async function finalizeVerification({ note, job, report, model }) {
@@ -212,8 +213,10 @@ async function processNextOcrJob() {
   );
 
   try {
-    const result = await extractNoteText(note, () =>
-      job.updateOne({ $set: { leaseAt: new Date() } }),
+    const result = await extractNoteText(
+      note,
+      () => job.updateOne({ $set: { leaseAt: new Date() } }),
+      note.uploadedBy,
     );
     const encryptedResult = encryptOcrResult(result);
     await NoteOcrResult.findOneAndUpdate(
@@ -240,10 +243,9 @@ async function processNextOcrJob() {
     ]);
   } catch (error) {
     console.error(`OCR processing failed for note ${note._id}:`, error);
-    const quotaUnavailable = error.retryableRateLimit === false;
     const exhausted = shouldExhaustOcrJob(error, job.attempts);
-    const message = quotaUnavailable
-      ? "Text extraction stopped because the OpenAI API account has no remaining quota. Restore API billing, then requeue this note's OCR."
+    const message = error.expose
+      ? error.message
       : exhausted
         ? "Text extraction failed after several attempts. Your original note is unchanged."
         : "Text extraction failed temporarily and will be retried.";
@@ -374,8 +376,11 @@ async function processNextVerificationJob() {
     });
   } catch (error) {
     console.error(`Academic verification failed for note ${note._id}:`, error);
-    const exhausted = job.attempts >= maxAttempts;
-    const message = exhausted
+    const exhausted =
+      error.retryableRateLimit === false || job.attempts >= maxAttempts;
+    const message = error.expose
+      ? error.message
+      : exhausted
       ? "Academic verification failed after several attempts. Your original notes are unchanged."
       : "Academic verification failed temporarily and will be retried.";
     if (exhausted) {

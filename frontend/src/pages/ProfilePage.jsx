@@ -4,7 +4,7 @@ import { Camera } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
 import { usePageMotion } from "../lib/usePageMotion.js";
-import { useBrandedLoadingScreen } from "../components/PageState.jsx";
+import { PageLoader } from "../components/PageState.jsx";
 import ProfileImageCropDialog from "../components/ProfileImageCropDialog.jsx";
 import StudentActivityHeatmap from "../components/StudentActivityHeatmap.jsx";
 
@@ -60,8 +60,6 @@ export default function ProfilePage() {
     () => data?.contributions.filter((item) => activeTab === "all" || item.type === activeTab) ?? [],
     [activeTab, data],
   );
-  const loadingScreen = useBrandedLoadingScreen(loading, "Loading profile…");
-
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -190,7 +188,7 @@ export default function ProfilePage() {
     }
   }
 
-  if (loading) return loadingScreen;
+  if (loading) return <PageLoader label="Loading profile…" />;
   if (error || !data) {
     return (
       <>
@@ -203,7 +201,6 @@ export default function ProfilePage() {
             Explore resources <span aria-hidden="true">↗</span>
           </Link>
         </main>
-        {loadingScreen}
       </>
     );
   }
@@ -467,7 +464,6 @@ export default function ProfilePage() {
         />
       )}
     </main>
-    {loadingScreen}
     </>
   );
 }

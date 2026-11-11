@@ -13,11 +13,38 @@ export default defineConfig(({ mode }) => {
     (process.env.VITE_ADSENSE_ENABLED ?? env.VITE_ADSENSE_ENABLED) === "true";
   const consentReady =
     (process.env.VITE_ADSENSE_CONSENT_READY ?? env.VITE_ADSENSE_CONSENT_READY) === "true";
+  const apiBaseUrl =
+    process.env.VITE_API_BASE_URL ?? env.VITE_API_BASE_URL ?? "http://localhost:5000/api";
+  const seoProxyTarget = new URL(apiBaseUrl, "http://localhost:5000/api").origin;
+  const seoProxy = Object.fromEntries(
+    ["/robots.txt", "/sitemap.xml", "/notes", "/question-papers", "/subjects"].map((path) => [
+      path,
+      { target: seoProxyTarget, changeOrigin: true },
+    ]),
+  );
   if (publisherId && !/^ca-pub-\d+$/.test(publisherId)) {
     throw new Error("VITE_ADSENSE_CLIENT_ID must be a valid ca-pub- publisher ID.");
   }
 
   return {
+    server: { proxy: seoProxy },
+    preview: { proxy: seoProxy },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            const normalizedId = id.replaceAll("\\", "/");
+            if (
+              normalizedId.includes("/node_modules/gsap/") ||
+              normalizedId.includes("/node_modules/@gsap/react/")
+            ) {
+              return "motion";
+            }
+            return undefined;
+          },
+        },
+      },
+    },
     plugins: [
       react(),
       {

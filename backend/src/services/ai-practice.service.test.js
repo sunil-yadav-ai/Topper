@@ -3,7 +3,12 @@ import { randomBytes } from "node:crypto";
 import test from "node:test";
 
 process.env.OCR_ENCRYPTION_KEY = randomBytes(32).toString("base64");
-process.env.OPENAI_API_KEY = "ai-practice-test-key";
+process.env.GEMINI_API_KEY = "ai-practice-test-key";
+process.env.GEMINI_TUTOR_MODEL = "test-tutor-model";
+import {
+  geminiJsonResponse,
+  mockGeminiUsage,
+} from "../test/gemini-test-helpers.js";
 
 const [
   { answerPracticeQuestion, endPracticeSession, getPracticeHistory, nextPracticeQuestion, nextPracticeDifficulty, serializePracticeSession, startPracticeSession, timeoutPracticeQuestion },
@@ -51,6 +56,7 @@ test("session serialization does not expose answer keys or grading points", () =
     course: "B.Tech",
     semester: 2,
     subject: "Python",
+    answerTimeSeconds: 45,
     topic: "",
     status: "active",
     currentDifficulty: "easy",
@@ -96,6 +102,7 @@ test("session serialization does not expose answer keys or grading points", () =
   };
   const serialized = serializePracticeSession(session);
   assert.equal(serialized.questions[0].question, "What is a variable?");
+  assert.equal(serialized.answerTimeSeconds, 45);
   assert.equal("answerKey" in serialized.questions[0], false);
   assert.equal("keyPoints" in serialized.questions[0], false);
 });
@@ -107,6 +114,7 @@ test("the Mongo practice-session schema accepts the persisted question and adapt
     course: "B.Tech",
     semester: 2,
     subject: "Python",
+    answerTimeSeconds: 45,
     currentDifficulty: "medium",
     highestDifficulty: "medium",
     currentConcept: "variables",
@@ -126,9 +134,25 @@ test("the Mongo practice-session schema accepts the persisted question and adapt
     strongConcepts: ["variables"],
   });
   assert.equal(record.validateSync(), undefined);
+  assert.equal(record.answerTimeSeconds, 45);
 });
 
-test("AI Practice starts with subject knowledge when matching notes are unavailable", async (t) => {
+test("AI Practice rejects answer timers outside the supported range", async () => {
+  await assert.rejects(
+    startPracticeSession({
+      user: { _id: "507f1f77bcf86cd799439011", semester: 2 },
+      selection: {
+        department: "CSE",
+        subject: "Python",
+        answerTimeSeconds: 121,
+      },
+    }),
+    { statusCode: 400 },
+  );
+});
+
+test("AI Practice accepts a subject without matching notes and uses general subject knowledge", async (t) => {
+  mockGeminiUsage(t);
   const studentId = "507f1f77bcf86cd799439011";
   const originalMethods = {
     noteFind: Note.find,
@@ -149,7 +173,12 @@ test("AI Practice starts with subject knowledge when matching notes are unavaila
       select() { return this; },
       sort() { return this; },
       limit() { return this; },
-      async lean() { assert.ok(filter.$and); return []; },
+      async lean() {
+        assert.equal(filter.department.source, "^Physics$");
+        assert.equal(filter.subject.source, "^Astrophysics$");
+        assert.equal(filter.$and, undefined);
+        return [];
+      },
     };
   };
   SyllabusAnalysis.find = () => ({
@@ -161,23 +190,17 @@ test("AI Practice starts with subject knowledge when matching notes are unavaila
   let promptInput;
   globalThis.fetch = async (_url, request) => {
     const body = JSON.parse(request.body);
-    promptInput = JSON.parse(body.input[1].content);
-    return new Response(JSON.stringify({
-      output: [{
-        content: [{
-          type: "output_text",
-          text: JSON.stringify({
-            question: "Which Python construct repeats a block while a condition remains true?",
-            concept: "loops",
-            type: "mcq",
-            choices: ["A while loop", "A variable", "A comment", "A string"],
-            answerKey: "A while loop",
-            answerExplanation: "A while loop repeats while its condition remains true.",
-            keyPoints: ["repeats", "condition"],
-          }),
-        }],
-      }],
-    }), { status: 200 });
+    promptInput = JSON.parse(body.contents[0].parts[0].text);
+    const subject = promptInput.requestedSelection.subject;
+    return geminiJsonResponse({
+      question: `What does ${subject} study?`,
+      concept: "foundational concepts",
+      type: "mcq",
+      choices: ["The subject's core ideas", "Only unrelated topics", "Nothing", "A file format"],
+      answerKey: "The subject's core ideas",
+      answerExplanation: `${subject} studies its core ideas.`,
+      keyPoints: ["core ideas", "subject"],
+    });
   };
   PracticeSession.create = async (input) => ({
     ...input,
@@ -200,18 +223,17 @@ test("AI Practice starts with subject knowledge when matching notes are unavaila
   const result = await startPracticeSession({
     user: { _id: studentId, semester: 2 },
     selection: {
-      department: "CSE",
-      subject: "Python",
-      topic: "Loops",
+      department: "Physics",
+      subject: "Astrophysics",
     },
   });
   assert.equal(result.available, true);
   assert.equal(result.session.course, "");
   assert.equal(result.session.semester, 2);
-  assert.match(result.session.questions[0].question, /Python/);
+  assert.match(result.session.questions[0].question, /Astrophysics/);
   assert.equal(promptInput.learningMaterial.startsWith("No uploaded notes"), true);
-  assert.equal(promptInput.requestedSelection.subject, "Python");
-  assert.equal(promptInput.requestedSelection.topic, "Loops");
+  assert.equal(promptInput.requestedSelection.subject, "Astrophysics");
+  assert.equal(promptInput.requestedSelection.topic, "Choose from this subject's syllabus topics");
   assert.equal(noteQueries, 1);
 });
 
@@ -294,6 +316,7 @@ test("the server rejects early, stale, and non-option answer requests", async (t
 });
 
 test("Python timed MCQ practice adapts after correct, incorrect, timeout, and recovery answers", async (t) => {
+  mockGeminiUsage(t);
   const studentId = "507f1f77bcf86cd799439011";
   const noteId = "507f1f77bcf86cd799439012";
   const note = {
@@ -398,42 +421,42 @@ test("Python timed MCQ practice adapts after correct, incorrect, timeout, and re
   });
   globalThis.fetch = async (_url, request) => {
     const body = JSON.parse(request.body);
-    const schemaName = body.text.format.name;
-    let result;
-    if (schemaName === "ai_practice_question") {
-      const input = JSON.parse(body.input[1].content);
-      result = {
-        question: questions[questionNumber],
-        concept: "variables",
-        type: "mcq",
-        choices: [correctChoice, wrongChoice, "A Python comment.", "A repeated instruction."],
-        answerKey: correctChoice,
-        answerExplanation: "A variable is a named location that stores data.",
-        keyPoints: ["named location", "stores data"],
-      };
-      assert.equal(input.difficulty, ["easy", "medium", "easy", "easy", "medium"][questionNumber]);
-      if (questionNumber === 2 || questionNumber === 3) assert.equal(input.requestedConcept, "variables");
-      questionNumber += 1;
-    } else {
-      throw new Error(`Unexpected OpenAI request: ${schemaName}`);
-    }
-    return new Response(JSON.stringify({
-      output: [{ content: [{ type: "output_text", text: JSON.stringify(result) }] }],
-    }), { status: 200 });
+    const input = JSON.parse(body.contents[0].parts[0].text);
+    const result = {
+      question: questions[questionNumber],
+      concept: "variables",
+      type: "mcq",
+      choices: [correctChoice, wrongChoice, "A Python comment.", "A repeated instruction."],
+      answerKey: correctChoice,
+      answerExplanation: "A variable is a named location that stores data.",
+      keyPoints: ["named location", "stores data"],
+    };
+    assert.equal(input.difficulty, ["easy", "medium", "easy", "easy", "medium"][questionNumber]);
+    if (questionNumber === 2 || questionNumber === 3) assert.equal(input.requestedConcept, "variables");
+    questionNumber += 1;
+    return geminiJsonResponse(result);
   };
 
   const user = { _id: studentId };
   let result = await startPracticeSession({
     user,
-    selection: { department: "CSE", course: "B.Tech", semester: 2, subject: "Python", topic: "" },
+    selection: {
+      department: "CSE",
+      course: "B.Tech",
+      semester: 2,
+      subject: "Python",
+      topic: "",
+      answerTimeSeconds: 45,
+    },
   });
   assert.equal(result.session.questions[0].difficulty, "easy");
+  assert.equal(result.session.answerTimeSeconds, 45);
   assert.equal("answerKey" in result.session.questions[0], false);
   assert.equal(result.session.questions[0].choices.length, 4);
   assert.equal(
     new Date(result.session.questions[0].answerDeadlineAt).getTime() -
       new Date(result.session.questions[0].optionsAvailableAt).getTime(),
-    20_000,
+    45_000,
   );
 
   await assert.rejects(
@@ -462,6 +485,12 @@ test("Python timed MCQ practice adapts after correct, incorrect, timeout, and re
     questionId: result.session.questions[0].id,
     user,
   });
+  assert.equal(result.session.answerTimeSeconds, 45);
+  assert.equal(
+    new Date(result.session.questions[1].answerDeadlineAt).getTime() -
+      new Date(result.session.questions[1].optionsAvailableAt).getTime(),
+    45_000,
+  );
   assert.equal(result.session.questions[1].difficulty, "medium");
   makeAnswerable(createdSession.questions[1]);
   result = await answerPracticeQuestion({

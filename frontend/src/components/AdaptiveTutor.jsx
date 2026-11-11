@@ -1,16 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  ArrowRight,
   BookOpen,
-  Check,
   CircleStop,
-  Lightbulb,
   LoaderCircle,
   MessageCircle,
-  RotateCcw,
-  Send,
   Sparkles,
-  X,
 } from "lucide-react";
 import { useGSAP } from "@gsap/react";
 import { api } from "../lib/api.js";
@@ -31,20 +25,26 @@ function getErrorMessage(error) {
   return error.response?.data?.message ?? error.message ?? "The tutor request failed.";
 }
 
-function getUnavailableMessage(message) {
-  if (
-    message ===
-    "We could not read text from this note, so the tutor cannot safely ask note-based questions."
-  ) {
-    return "Text extraction failed because the OpenAI API quota for this note is exhausted. Restore API billing, requeue the note's OCR, then refresh this page.";
-  }
-  return message || "Text extraction must finish before the AI tutor can use this note.";
-}
-
-function getCurrentQuestion(session) {
-  return [...(session?.questions ?? [])]
-    .reverse()
-    .find((question) => !question.answeredAt && !question.skipped);
+function addCompletedSession(history, session) {
+  return {
+    ...history,
+    activeSession: null,
+    previousSessions: [
+      {
+        id: session.id,
+        correctCount: session.correctCount,
+        incorrectCount: session.incorrectCount,
+        questionsAsked: session.questionsAnswered,
+        totalQuestions: session.totalQuestions,
+        scorePercent: session.scorePercent,
+        strongConcepts: session.strongConcepts,
+        weakConcepts: session.weakConcepts,
+        createdAt: session.createdAt,
+        completedAt: session.completedAt,
+      },
+      ...(history?.previousSessions ?? []).filter((item) => item.id !== session.id),
+    ].slice(0, 5),
+  };
 }
 
 export default function AdaptiveTutor({ noteId, resourceType }) {
@@ -52,25 +52,19 @@ export default function AdaptiveTutor({ noteId, resourceType }) {
   const rootRef = useRef(null);
   const conversationRef = useRef(null);
   const questionRef = useRef(null);
-  const feedbackRef = useRef(null);
   const [history, setHistory] = useState(null);
   const [session, setSession] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
-  const [answer, setAnswer] = useState("");
   const [busy, setBusy] = useState(false);
   const [pendingAction, setPendingAction] = useState("");
   const [error, setError] = useState("");
 
-  const currentQuestion = getCurrentQuestion(session);
-  const questionsAnswered = session?.questions.filter((question) => question.answeredAt).length ?? 0;
+  const questionsAnswered = session?.questionsAnswered ?? 0;
   const answeredCorrectly = session?.correctCount ?? 0;
-  const accuracy = questionsAnswered
-    ? Math.round((answeredCorrectly / questionsAnswered) * 100)
-    : 0;
-  const recentFeedback = useMemo(
-    () => [...(session?.questions ?? [])].reverse().find((question) => question.answeredAt),
-    [session],
-  );
+  const accuracy = session?.scorePercent ?? 0;
+  const currentQuestion = session?.status === "active"
+    ? [...(session.questions ?? [])].reverse().find((question) => !question.answeredAt)
+    : null;
 
   useEffect(() => {
     if (user?.role !== "user") return undefined;
@@ -103,31 +97,6 @@ export default function AdaptiveTutor({ noteId, resourceType }) {
     return undefined;
   }, { scope: rootRef, dependencies: [currentQuestion?.id], revertOnUpdate: true });
 
-  useGSAP(() => {
-    const node = feedbackRef.current;
-    if (!node || !recentFeedback || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      return undefined;
-    }
-    if (recentFeedback.isCorrect) {
-      gsap.fromTo(node, { scale: 0.97, autoAlpha: 0.6 }, {
-        scale: 1,
-        autoAlpha: 1,
-        duration: 0.36,
-        ease: "back.out(1.7)",
-        clearProps: "transform",
-      });
-    } else {
-      gsap.fromTo(node, { x: -5 }, {
-        x: 0,
-        duration: 0.34,
-        ease: "power2.out",
-        keyframes: [{ x: 5 }, { x: -3 }, { x: 0 }],
-        clearProps: "transform",
-      });
-    }
-    return undefined;
-  }, { scope: rootRef, dependencies: [recentFeedback?.id, recentFeedback?.isCorrect], revertOnUpdate: true });
-
   useEffect(() => {
     const conversation = conversationRef.current;
     if (!conversation) return;
@@ -135,7 +104,7 @@ export default function AdaptiveTutor({ noteId, resourceType }) {
       top: conversation.scrollHeight,
       behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
     });
-  }, [session?.questions.length, recentFeedback?.id]);
+  }, [session?.questions.length, session?.questionsAnswered]);
 
   async function runAction(action, task) {
     setBusy(true);
@@ -159,18 +128,20 @@ export default function AdaptiveTutor({ noteId, resourceType }) {
         tutorRequestConfig,
       );
       if (!data.available) {
-        setHistory((current) => ({ ...current, available: false, unavailableMessage: data.message }));
+        setHistory((current) => ({
+          ...current,
+          available: false,
+          unavailableMessage: data.message,
+        }));
         return;
       }
       setSession(data.session);
       setIsOpen(true);
-      setAnswer("");
     });
   }
 
-  function submitAnswer(event) {
-    event.preventDefault();
-    if (!session || !answer.trim()) return;
+  function chooseAnswer(answer) {
+    if (!session || !currentQuestion || busy) return;
     void runAction("answer", async () => {
       const { data } = await api.post(
         `/learning-tutor/sessions/${session.id}/answer`,
@@ -178,46 +149,23 @@ export default function AdaptiveTutor({ noteId, resourceType }) {
         tutorRequestConfig,
       );
       setSession(data.session);
-      setAnswer("");
+      if (data.session.status === "completed") {
+        setHistory((current) => addCompletedSession(current, data.session));
+      }
       if (data.nextQuestionError) setError(data.nextQuestionError);
     });
   }
 
-  function requestSessionAction(action) {
+  function endSession() {
     if (!session) return;
-    const endpoints = {
-      hint: "hint",
-      explain: "explain",
-      next: "next",
-      end: "end",
-    };
-    void runAction(action, async () => {
+    void runAction("end", async () => {
       const { data } = await api.post(
-        `/learning-tutor/sessions/${session.id}/${endpoints[action]}`,
+        `/learning-tutor/sessions/${session.id}/end`,
         {},
         tutorRequestConfig,
       );
       setSession(data.session);
-      if (action === "end") {
-        setIsOpen(false);
-        setHistory((current) => ({
-          ...current,
-          activeSession: null,
-          previousSessions: [
-            {
-              id: data.session.id,
-              correctCount: data.session.correctCount,
-              incorrectCount: data.session.incorrectCount,
-              questionsAsked: data.session.questions.length,
-              strongConcepts: data.session.strongConcepts,
-              weakConcepts: data.session.weakConcepts,
-              createdAt: data.session.createdAt,
-              completedAt: data.session.completedAt,
-            },
-            ...(current?.previousSessions ?? []).filter((item) => item.id !== data.session.id),
-          ].slice(0, 5),
-        }));
-      }
+      setHistory((current) => addCompletedSession(current, data.session));
     });
   }
 
@@ -242,31 +190,39 @@ export default function AdaptiveTutor({ noteId, resourceType }) {
       </header>
 
       {!isOpen && (
-        <div className="ed-tutor-intro">
-          <div className="ed-tutor-intro-copy">
-            <h3>Learn this note, one question at a time.</h3>
-            <p>
-              Your tutor uses this note&apos;s extracted text, adapts to your answers, and remembers your progress.
-            </p>
+        <>
+          <div className="ed-tutor-intro">
+            <div className="ed-tutor-intro-copy">
+              <h3>Practice {history?.topic || "this resource"} one question at a time.</h3>
+              <p>
+                {history?.subject && history?.topic
+                  ? `10 multiple-choice questions about ${history.topic} in ${history.subject}.`
+                  : "Questions are created automatically from this resource's details."}
+                {" "}Choose an option to answer—no typing required.
+              </p>
+            </div>
           </div>
-          {history?.available === false ? (
-            <p className="ed-tutor-unavailable" role="status">
-              {getUnavailableMessage(history.unavailableMessage)}
-            </p>
-          ) : (
+          <div className="ed-tutor-start">
+            {history?.available === false ? (
+              <p className="ed-tutor-unavailable" role="status">
+                {history.unavailableMessage}
+              </p>
+            ) : (
             <button
               className="ed-tutor-primary"
-              disabled={busy}
+              disabled={busy || !history}
               onClick={startLearning}
               type="button"
             >
               {busy && pendingAction === "start"
                 ? <LoaderCircle aria-hidden="true" className="ed-tutor-spin" size={17} />
                 : <MessageCircle aria-hidden="true" size={17} />}
-              {history?.activeSession ? "Continue Learning with AI" : "Start Learning with AI"}
+              {history?.activeSession ? "Continue Quiz" : "Start 10-Question Quiz"}
             </button>
-          )}
-        </div>
+            )}
+            {error && <p className="ed-tutor-unavailable" role="alert">{error}</p>}
+          </div>
+        </>
       )}
 
       {history?.previousSessions?.length > 0 && !isOpen && (
@@ -275,8 +231,8 @@ export default function AdaptiveTutor({ noteId, resourceType }) {
           {history.previousSessions.slice(0, 3).map((item) => (
             <div className="ed-tutor-history-row" key={item.id}>
               <span>{new Date(item.completedAt ?? item.createdAt).toLocaleDateString()}</span>
-              <span>{item.questionsAsked} questions · {item.correctCount} correct</span>
-              <span>{item.strongConcepts.length} strong · {item.weakConcepts.length} to revisit</span>
+              <span>Score: {item.correctCount}/{item.totalQuestions ?? 10} · {item.questionsAsked} answered</span>
+              <span>{item.scorePercent}% accuracy</span>
             </div>
           ))}
         </div>
@@ -286,18 +242,18 @@ export default function AdaptiveTutor({ noteId, resourceType }) {
         <>
           <div className="ed-tutor-progress">
             <div className="ed-tutor-progress-label">
-              <span>{questionsAnswered} answered · {accuracy}% accuracy</span>
-              <span>{session.strongConcepts.length} strong · {session.weakConcepts.length} to revisit</span>
+              <span>Question {Math.min(questionsAnswered + (currentQuestion ? 1 : 0), session.totalQuestions)} of {session.totalQuestions}</span>
+              <span>Score: {answeredCorrectly}/{questionsAnswered} · {accuracy}%</span>
             </div>
             <div
-              aria-label={`Answer accuracy ${accuracy}%`}
+              aria-label={`Quiz progress ${questionsAnswered} of ${session.totalQuestions} questions answered`}
               aria-valuemax="100"
               aria-valuemin="0"
-              aria-valuenow={accuracy}
+              aria-valuenow={Math.round((questionsAnswered / session.totalQuestions) * 100)}
               className="ed-tutor-progress-track"
               role="progressbar"
             >
-              <span style={{ width: `${accuracy}%` }} />
+              <span style={{ width: `${Math.round((questionsAnswered / session.totalQuestions) * 100)}%` }} />
             </div>
           </div>
 
@@ -307,16 +263,23 @@ export default function AdaptiveTutor({ noteId, resourceType }) {
                 <div className="ed-tutor-bubble ed-tutor-bubble-ai">
                   <span className="ed-tutor-avatar"><Sparkles aria-hidden="true" size={14} /></span>
                   <div>
-                    <p className="ed-tutor-message-label">TOPPER TUTOR · {difficultyLabels[question.difficulty]}</p>
+                    <p className="ed-tutor-message-label">QUESTION {session.questions.indexOf(question) + 1} · {difficultyLabels[question.difficulty]}</p>
                     <p>{question.question}</p>
                     {question.type === "mcq" && question.choices.length > 0 && (
                       <div className="ed-tutor-choices">
                         {question.choices.map((choice, index) => (
                           <button
-                            aria-pressed={answer === `${String.fromCharCode(65 + index)}. ${choice}`}
-                            disabled={Boolean(question.answeredAt) || busy}
+                            aria-pressed={question.studentAnswer === choice}
+                            className={question.answeredAt
+                              ? question.isCorrect && choice === question.studentAnswer
+                                ? "is-correct"
+                                : !question.isCorrect && choice === question.studentAnswer
+                                  ? "is-incorrect"
+                                  : ""
+                              : ""}
+                            disabled={Boolean(question.answeredAt) || busy || session.status !== "active"}
                             key={`${question.id}-${choice}`}
-                            onClick={() => setAnswer(`${String.fromCharCode(65 + index)}. ${choice}`)}
+                            onClick={() => chooseAnswer(choice)}
                             type="button"
                           >
                             <span>{String.fromCharCode(65 + index)}</span>{choice}
@@ -332,108 +295,45 @@ export default function AdaptiveTutor({ noteId, resourceType }) {
                     <p>{question.studentAnswer}</p>
                   </div>
                 )}
-                {question.feedback && (
-                  <div
-                    className={`ed-tutor-feedback ${question.isCorrect ? "is-correct" : "is-incorrect"}`}
-                    ref={question.id === recentFeedback?.id ? feedbackRef : undefined}
-                  >
-                    {question.isCorrect
-                      ? <Check aria-hidden="true" size={17} />
-                      : <X aria-hidden="true" size={17} />}
-                    <div>
-                      <strong>{question.feedback}</strong>
-                      {!question.isCorrect && question.explanation && <p>{question.explanation}</p>}
-                      {!question.isCorrect && question.workedExample && (
-                        <p className="ed-tutor-worked-example"><b>Worked example:</b> {question.workedExample}</p>
-                      )}
-                    </div>
-                  </div>
+                {question.answeredAt && (
+                  <p className={`ed-tutor-feedback ${question.isCorrect ? "is-correct" : "is-incorrect"}`}>
+                    {question.feedback}{question.explanation ? ` ${question.explanation}` : ""}
+                  </p>
                 )}
-                {question.hintText && (
-                  <p className="ed-tutor-note"><Lightbulb aria-hidden="true" size={16} /> Hint: {question.hintText}</p>
-                )}
-                {question.explainAgain && (
-                  <p className="ed-tutor-note"><BookOpen aria-hidden="true" size={16} /> {question.explainAgain}</p>
-                )}
-                {question.skipped && <p className="ed-tutor-skipped">Question skipped; the tutor kept your current level.</p>}
               </div>
             ))}
             {currentQuestion && (
               <div className="ed-tutor-question-panel" data-tutor-question ref={questionRef}>
-                <form onSubmit={submitAnswer}>
-                  <label htmlFor={`tutor-answer-${session.id}`}>Your answer</label>
-                  <textarea
-                    autoComplete="off"
-                    id={`tutor-answer-${session.id}`}
-                    maxLength={2000}
-                    onChange={(event) => setAnswer(event.target.value)}
-                    placeholder="Explain it in your own words…"
-                    rows={3}
-                    value={answer}
-                  />
-                  <div className="ed-tutor-actions">
-                    <button className="ed-tutor-primary" disabled={busy || !answer.trim()} type="submit">
-                      {busy && pendingAction === "answer"
-                        ? <LoaderCircle aria-hidden="true" className="ed-tutor-spin" size={16} />
-                        : <Send aria-hidden="true" size={16} />}
-                      Submit Answer
-                    </button>
-                    <button
-                      className="ed-tutor-secondary"
-                      disabled={busy}
-                      onClick={() => requestSessionAction("hint")}
-                      type="button"
-                    >
-                      <Lightbulb aria-hidden="true" size={16} /> Hint
-                    </button>
-                    <button
-                      className="ed-tutor-secondary"
-                      disabled={busy}
-                      onClick={() => requestSessionAction("explain")}
-                      type="button"
-                    >
-                      <RotateCcw aria-hidden="true" size={16} /> Explain Again
-                    </button>
-                    <button
-                      className="ed-tutor-text-button"
-                      disabled={busy}
-                      onClick={() => requestSessionAction("next")}
-                      type="button"
-                    >
-                      Next Question <ArrowRight aria-hidden="true" size={15} />
-                    </button>
-                  </div>
-                </form>
+                {busy && pendingAction === "answer" && (
+                  <p role="status"><LoaderCircle aria-hidden="true" className="ed-tutor-spin" size={16} /> Checking your answer…</p>
+                )}
               </div>
             )}
-            {!currentQuestion && session.status === "active" && (
-              <div className="ed-tutor-question-panel">
-                <p>The last answer is saved. Continue at {difficultyLabels[session.currentDifficulty]} level when you&apos;re ready.</p>
-                <button
-                  className="ed-tutor-primary"
-                  disabled={busy}
-                  onClick={() => requestSessionAction("next")}
-                  type="button"
-                >
-                  {busy && pendingAction === "next"
-                    ? <LoaderCircle aria-hidden="true" className="ed-tutor-spin" size={16} />
-                    : <ArrowRight aria-hidden="true" size={16} />}
-                  Try the next question
-                </button>
+            {session.status === "completed" && (
+              <div className="ed-tutor-question-panel" role="status">
+                <h3>{questionsAnswered === session.totalQuestions ? "Quiz complete!" : "Quiz stopped"}</h3>
+                <p className="ed-tutor-message-label">YOUR SCORE</p>
+                <p>{answeredCorrectly} correct out of {session.totalQuestions}</p>
+                <p>You answered {questionsAnswered} of {session.totalQuestions} questions · {accuracy}% accuracy</p>
               </div>
             )}
             {error && <p className="ed-tutor-error" role="alert">{error}</p>}
           </div>
           <div className="ed-tutor-footer">
-            <span>Questions are grounded in the extracted text of this note.</span>
-            <button
-              className="ed-tutor-end"
-              disabled={busy}
-              onClick={() => requestSessionAction("end")}
-              type="button"
-            >
-              <CircleStop aria-hidden="true" size={16} /> End Learning Session
-            </button>
+            <span>10 multiple-choice questions about {session.topic}.</span>
+            {session.status === "active" && (
+              <button
+                className="ed-tutor-end"
+                disabled={busy}
+                onClick={endSession}
+                type="button"
+              >
+                {busy && pendingAction === "end"
+                  ? <LoaderCircle aria-hidden="true" className="ed-tutor-spin" size={16} />
+                  : <CircleStop aria-hidden="true" size={16} />}
+                Stop and Show Score
+              </button>
+            )}
           </div>
         </>
       )}

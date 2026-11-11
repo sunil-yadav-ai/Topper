@@ -14,10 +14,7 @@ import {
 import { ensureNotePreview } from "../services/note-preview.service.js";
 import { getPyqFileUrl } from "../services/pyq-storage.service.js";
 import { streamResourceView } from "../services/resource-view.service.js";
-import {
-  migrateLegacyPyqBookmarks,
-  recordResourceAccess,
-} from "../services/student-library.service.js";
+import { migrateLegacyPyqBookmarks } from "../services/student-library.service.js";
 
 export async function searchResourceCollection(request, response) {
   if (request.user?.role === "user") {
@@ -50,7 +47,7 @@ export async function markSearchResultHelpful(request, response) {
   });
 }
 
-export async function viewResource(request, response) {
+async function findViewableResource(request, { populateUploader = false } = {}) {
   const { resourceType, resourceId } = request.params;
   if (!["note", "pyq"].includes(resourceType)) {
     const error = new Error("Resource type must be note or pyq.");
@@ -64,7 +61,11 @@ export async function viewResource(request, response) {
   }
 
   const Model = resourceType === "note" ? Note : Pyq;
-  const resource = await Model.findById(resourceId).populate("uploadedBy", "fullName");
+  let resourceQuery = Model.findById(resourceId);
+  if (populateUploader) {
+    resourceQuery = resourceQuery.populate("uploadedBy", "fullName");
+  }
+  const resource = await resourceQuery;
   if (!resource) {
     const error = new Error("Resource not found.");
     error.statusCode = 404;
@@ -79,14 +80,24 @@ export async function viewResource(request, response) {
     error.statusCode = 404;
     throw error;
   }
-  if (request.user.role === "user") {
-    await recordResourceAccess({
-      userId: request.user._id,
-      resourceType,
-      resourceId: resource._id,
-    });
-  }
+  return { resource, resourceType };
+}
 
+export async function getResourceViewInfo(request, response) {
+  const { resource, resourceType } = await findViewableResource(request, {
+    populateUploader: true,
+  });
+  response.json({
+    status: "success",
+    resource: {
+      format: resource.storage.format ?? "pdf",
+      uploaderName: resource.uploadedBy?.fullName ?? "",
+    },
+  });
+}
+
+export async function viewResource(request, response) {
+  const { resource, resourceType } = await findViewableResource(request);
   await streamResourceView(request, response, {
     url: resourceType === "note"
       ? getPrivateNoteDownloadUrl(resource.storage)

@@ -27,18 +27,21 @@ export const env = {
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME ?? "",
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY ?? "",
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET ?? "",
-  openAiApiKey: process.env.OPENAI_API_KEY ?? "",
-  openAiOcrModel: process.env.OPENAI_OCR_MODEL ?? "gpt-4.1-mini",
-  openAiSyllabusModel:
-    process.env.OPENAI_SYLLABUS_MODEL ??
-    process.env.OPENAI_OCR_MODEL ??
-    "gpt-4.1-mini",
-  openAiTutorModel:
-    process.env.OPENAI_TUTOR_MODEL ??
-    process.env.OPENAI_OCR_MODEL ??
-    "gpt-4.1-mini",
-  openAiVerificationModel:
-    process.env.OPENAI_VERIFICATION_MODEL ?? "gpt-4.1-mini",
+  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
+  geminiOcrModel: process.env.GEMINI_OCR_MODEL ?? "",
+  geminiSyllabusModel: process.env.GEMINI_SYLLABUS_MODEL ?? "",
+  geminiVerificationModel: process.env.GEMINI_VERIFICATION_MODEL ?? "",
+  geminiTutorModel: process.env.GEMINI_TUTOR_MODEL ?? "",
+  geminiVerificationUseGoogleSearch:
+    process.env.GEMINI_VERIFICATION_USE_GOOGLE_SEARCH === "true",
+  geminiUserDailyRequestLimit: Number.parseInt(
+    process.env.GEMINI_USER_DAILY_REQUEST_LIMIT ?? "100",
+    10,
+  ),
+  geminiUserMinuteRequestLimit: Number.parseInt(
+    process.env.GEMINI_USER_MINUTE_REQUEST_LIMIT ?? "30",
+    10,
+  ),
   academicReferenceDomains: (process.env.ACADEMIC_REFERENCE_DOMAINS ??
     "openstax.org,nist.gov,mathworld.wolfram.com,chem.libretexts.org,physicsclassroom.com,khanacademy.org")
     .split(",")
@@ -126,6 +129,15 @@ if (
   env.minimumVerifiableStatements < 1
 ) {
   throw new Error("MIN_VERIFIABLE_STATEMENTS must be a positive integer.");
+}
+
+for (const [name, limit] of Object.entries({
+  GEMINI_USER_DAILY_REQUEST_LIMIT: env.geminiUserDailyRequestLimit,
+  GEMINI_USER_MINUTE_REQUEST_LIMIT: env.geminiUserMinuteRequestLimit,
+})) {
+  if (!Number.isSafeInteger(limit) || limit < 1) {
+    throw new Error(`${name} must be a positive safe integer.`);
+  }
 }
 
 if (!Number.isSafeInteger(env.rewardBudgetPoints) || env.rewardBudgetPoints < 0) {

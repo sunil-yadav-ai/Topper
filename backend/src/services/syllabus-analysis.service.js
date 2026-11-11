@@ -6,6 +6,7 @@ import {
 } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { env } from "../config/env.js";
 import { encryptJson } from "./encrypted-json.service.js";
+import { generateStructuredContent } from "./gemini-ai.service.js";
 
 GlobalWorkerOptions.workerSrc = import.meta.resolve(
   "pdfjs-dist/legacy/build/pdf.worker.mjs",
@@ -89,20 +90,6 @@ function providerError(message, statusCode = 502) {
   return error;
 }
 
-function parseOutputText(payload, description) {
-  const outputText = payload.output
-    ?.flatMap((item) => item.content ?? [])
-    .find((item) => item.type === "output_text")?.text;
-  if (!outputText) {
-    throw providerError(`AI service returned no ${description}.`);
-  }
-  try {
-    return JSON.parse(outputText);
-  } catch {
-    throw providerError(`AI service returned invalid ${description}.`);
-  }
-}
-
 export function validateSyllabusFile(file) {
   const extension = file.originalname.split(".").pop()?.toLowerCase();
   const formats = {
@@ -164,55 +151,26 @@ export async function splitSyllabusPdfIntoPages(pdfBytes) {
   return pages;
 }
 
-async function requestStructuredOutput({ content, schemaName, schema, maxOutputTokens }) {
-  if (!env.openAiApiKey) {
-    throw providerError("AI analysis is not configured. Contact an administrator.", 503);
-  }
-
-  let response;
-  try {
-    response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.openAiApiKey}`,
-        "Content-Type": "application/json",
-      },
-      signal: AbortSignal.timeout(90_000),
-      body: JSON.stringify({
-        model: env.openAiSyllabusModel,
-        input: [{ role: "user", content }],
-        store: false,
-        text: {
-          format: {
-            type: "json_schema",
-            name: schemaName,
-            strict: true,
-            schema,
-          },
-        },
-        max_output_tokens: maxOutputTokens,
-      }),
-    });
-  } catch {
-    throw providerError("Could not reach the AI analysis service.");
-  }
-  if (!response.ok) {
-    const message = response.status === 401 || response.status === 403
-      ? "AI analysis is not authorized. Contact an administrator."
-      : response.status === 429
-        ? "AI analysis is temporarily unavailable or over its usage limit. Please try again later."
-        : response.status >= 500
-          ? "AI analysis service is temporarily unavailable. Please try again later."
-          : `AI analysis service rejected the request (HTTP ${response.status}).`;
-    throw providerError(message, response.status === 429 ? 503 : 502);
-  }
-  return parseOutputText(await response.json(), schemaName);
+async function requestStructuredOutput({
+  content,
+  schema,
+  maxOutputTokens,
+  userId,
+}) {
+  const { result } = await generateStructuredContent({
+    feature: "syllabus",
+    userId,
+    contents: [{ role: "user", parts: content }],
+    schema,
+    maxOutputTokens,
+    timeoutMs: 90_000,
+  });
+  return result;
 }
 
-async function extractPageText(page) {
+async function extractPageText(page, userId) {
   const content = [
     {
-      type: "input_text",
       text:
         `Transcribe the syllabus on source page ${page.pageNumber} exactly. ` +
         "Do not add, infer, correct, or complete content. Keep headings and bullet " +
@@ -222,24 +180,17 @@ async function extractPageText(page) {
         "extractedText and set readabilityStatus to readable.",
     },
   ];
-  if (page.mimeType === "application/pdf") {
-    content.push({
-      type: "input_file",
-      filename: `syllabus-page-${page.pageNumber}.pdf`,
-      file_data: `data:application/pdf;base64,${page.bytes.toString("base64")}`,
-    });
-  } else {
-    content.push({
-      type: "input_image",
-      image_url: `data:${page.mimeType};base64,${page.bytes.toString("base64")}`,
-      detail: "high",
-    });
-  }
+  content.push({
+    inlineData: {
+      mimeType: page.mimeType,
+      data: page.bytes.toString("base64"),
+    },
+  });
   const result = await requestStructuredOutput({
     content,
-    schemaName: "syllabus_page_ocr",
     schema: ocrSchema,
     maxOutputTokens: 4000,
+    userId,
   });
   if (
     result.pageNumber !== page.pageNumber ||
@@ -350,7 +301,7 @@ function cleanName(value, label, maxLength) {
   return cleaned;
 }
 
-export async function organizeSyllabusPages(ocrPages) {
+export async function organizeSyllabusPages(ocrPages, userId) {
   let totalTextLength = 0;
   for (const page of ocrPages) {
     totalTextLength += page.extractedText.length;
@@ -403,7 +354,6 @@ export async function organizeSyllabusPages(ocrPages) {
     const result = await requestStructuredOutput({
       content: [
         {
-          type: "input_text",
           text:
             "Extract the syllabus hierarchy from this source text. Return course and semester " +
             "only when explicitly present; otherwise use null. Extract only information in " +
@@ -416,9 +366,9 @@ export async function organizeSyllabusPages(ocrPages) {
             sourceText,
         },
       ],
-      schemaName: "organized_syllabus",
       schema: syllabusSchema,
       maxOutputTokens: 12000,
+      userId,
     });
     const partial = normalizeSyllabusStructure(result, { allowEmpty: true });
     merged.course ??= partial.course;
@@ -542,7 +492,7 @@ async function extractPdfTextPages(pdfBytes) {
   }
 }
 
-export async function extractAndOrganizeSyllabus(file, format) {
+export async function extractAndOrganizeSyllabus(file, format, userId) {
   let pages;
   let ocrPages;
   let expectedPageCount = 1;
@@ -568,7 +518,7 @@ export async function extractAndOrganizeSyllabus(file, format) {
       const ocrByPage = new Map();
       for (let index = 0; index < pagesToRead.length; index += 3) {
         const extractedBatch = await Promise.all(
-          pagesToRead.slice(index, index + 3).map(extractPageText),
+          pagesToRead.slice(index, index + 3).map((page) => extractPageText(page, userId)),
         );
         extractedBatch.forEach((page) => ocrByPage.set(page.pageNumber, page));
       }
@@ -598,7 +548,7 @@ export async function extractAndOrganizeSyllabus(file, format) {
   }
   for (let index = 0; pages && index < pages.length; index += 3) {
     const extractedBatch = await Promise.all(
-      pages.slice(index, index + 3).map(extractPageText),
+      pages.slice(index, index + 3).map((page) => extractPageText(page, userId)),
     );
     ocrPages.push(...extractedBatch);
   }
@@ -614,7 +564,7 @@ export async function extractAndOrganizeSyllabus(file, format) {
   }
   return {
     pages: ocrPages,
-    structure: await organizeSyllabusPages(ocrPages),
+    structure: await organizeSyllabusPages(ocrPages, userId),
   };
 }
 

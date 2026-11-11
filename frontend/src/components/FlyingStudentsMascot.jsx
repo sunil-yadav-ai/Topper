@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { useGSAP } from "@gsap/react";
 import { gsap } from "../lib/gsap.js";
-import illustration from "../assets/topper-loading-mascot.png";
+import illustration from "../assets/topper-loading-mascot.webp";
 
 gsap.registerPlugin(useGSAP);
 
@@ -72,7 +72,7 @@ export default function FlyingStudentsMascot({ className = "" }) {
       aria-hidden="true"
       className={`ed-flying-students-mascot ${className}`}
     >
-      <img alt="" decoding="async" draggable="false" src={illustration} />
+      <img alt="" decoding="async" draggable="false" height="768" src={illustration} width="1151" />
     </div>
   );
 }

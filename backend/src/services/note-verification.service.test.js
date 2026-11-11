@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-process.env.OPENAI_API_KEY = "test-api-key";
-process.env.OPENAI_VERIFICATION_MODEL = "test-verification-model";
+process.env.GEMINI_API_KEY = "test-api-key";
+process.env.GEMINI_VERIFICATION_MODEL = "test-verification-model";
+process.env.GEMINI_VERIFICATION_USE_GOOGLE_SEARCH = "true";
 process.env.ACADEMIC_REFERENCE_DOMAINS = "openstax.org,nist.gov";
+import {
+  geminiJsonResponse,
+  mockGeminiUsage,
+} from "../test/gemini-test-helpers.js";
 const { verifyAcademicNotes } = await import("./note-verification.service.js");
+const testUserId = "507f1f77bcf86cd799439011";
 
 function issue(overrides = {}) {
   return {
@@ -21,57 +27,44 @@ function issue(overrides = {}) {
   };
 }
 
-test("requires OCR provenance and actual academic citations to confirm errors", async () => {
+test("requires OCR provenance and actual Gemini grounding citations to confirm errors", async (t) => {
+  mockGeminiUsage(t);
   const originalFetch = globalThis.fetch;
   let request;
-  let requestHeaders;
   globalThis.fetch = async (_url, options) => {
     request = JSON.parse(options.body);
-    requestHeaders = options.headers;
-    return Response.json({
-      output: [
-        {
-          content: [
-            {
-              type: "output_text",
-              text: JSON.stringify({
-                issues: [
-                  issue(),
-                  issue({
-                    originalStatement: "A fabricated statement.",
-                    errorCategory: "factual_inaccuracy",
-                    referenceUrls: ["https://openstax.org/books/calculus-volume-1"],
-                  }),
-                  issue({
-                    originalStatement: "Another statement from the page.",
-                    referenceUrls: [],
-                  }),
-                  issue({
-                    originalStatement: "The derivative of x^2 is 2x.",
-                    confidence: 0.62,
-                  }),
-                ],
-                pages: [
-                  {
-                    pageNumber: 1,
-                    verifiableStatementCount: 20,
-                    analysisReliable: true,
-                    analysisLimitations: [],
-                  },
-                ],
-              }),
-              annotations: [
-                {
-                  type: "url_citation",
-                  title: "OpenStax Calculus Volume 1",
-                  url: "https://openstax.org/books/calculus-volume-1",
-                },
-              ],
-            },
-          ],
+    return geminiJsonResponse(
+      {
+        issues: [
+          issue(),
+          issue({
+            originalStatement: "A fabricated statement.",
+            errorCategory: "factual_inaccuracy",
+            referenceUrls: ["https://openstax.org/books/calculus-volume-1"],
+          }),
+          issue({
+            originalStatement: "Another statement from the page.",
+            referenceUrls: [],
+          }),
+          issue({
+            originalStatement: "The derivative of x^2 is 2x.",
+            confidence: 0.62,
+          }),
+        ],
+        pages: [{
+          pageNumber: 1,
+          verifiableStatementCount: 20,
+          analysisReliable: true,
+          analysisLimitations: [],
+        }],
+      },
+      [{
+        web: {
+          title: "OpenStax Calculus Volume 1",
+          uri: "https://openstax.org/books/calculus-volume-1",
         },
-      ],
-    });
+      }],
+    );
   };
 
   try {
@@ -84,6 +77,7 @@ test("requires OCR provenance and actual academic citations to confirm errors", 
         subject: "Calculus",
         unit: "Derivatives",
         topic: "Power rule",
+        uploadedBy: testUserId,
       },
       ocrResult: {
         pages: [
@@ -99,17 +93,11 @@ test("requires OCR provenance and actual academic citations to confirm errors", 
       },
     });
 
-    assert.equal(request.store, false);
-    assert.equal(request.model, "test-verification-model");
-    assert.ok(requestHeaders.Authorization.startsWith("Bearer "));
-    assert.match(request.instructions, /definitions, formulas, calculations/i);
-    assert.match(request.instructions, /contradictions/i);
-    assert.match(request.instructions, /potential_safety_concern/i);
-    assert.match(request.instructions, /potential_copyright_concern/i);
-    assert.deepEqual(request.tools[0].filters.allowed_domains, [
-      "openstax.org",
-      "nist.gov",
-    ]);
+    assert.match(JSON.stringify(request), /definitions, formulas, calculations/i);
+    assert.match(JSON.stringify(request), /contradictions/i);
+    assert.match(JSON.stringify(request), /potential_safety_concern/i);
+    assert.match(JSON.stringify(request), /potential_copyright_concern/i);
+    assert.deepEqual(request.tools[0].googleSearch, {});
     assert.equal(result.report.overallClassification, "CONFIRMED_ERROR");
     assert.equal(result.report.confirmedErrorCount, 2);
     assert.equal(result.report.uncertainCount, 2);
@@ -131,37 +119,22 @@ test("requires OCR provenance and actual academic citations to confirm errors", 
   }
 });
 
-test("accepts uncertain safety and copyright findings for human review", async () => {
+test("accepts uncertain safety and copyright findings for human review", async (t) => {
+  mockGeminiUsage(t);
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>
-    Response.json({
-      output: [
-        {
-          content: [
-            {
-              type: "output_text",
-              text: JSON.stringify({
-                issues: [
-                  issue({
-                    errorCategory: "potential_copyright_concern",
-                    classification: "UNCERTAIN",
-                    referenceUrls: [],
-                  }),
-                ],
-                pages: [
-                  {
-                    pageNumber: 1,
-                    verifiableStatementCount: 20,
-                    analysisReliable: true,
-                    analysisLimitations: [],
-                  },
-                ],
-              }),
-              annotations: [],
-            },
-          ],
-        },
-      ],
+    geminiJsonResponse({
+      issues: [issue({
+        errorCategory: "potential_copyright_concern",
+        classification: "UNCERTAIN",
+        referenceUrls: [],
+      })],
+      pages: [{
+        pageNumber: 1,
+        verifiableStatementCount: 20,
+        analysisReliable: true,
+        analysisLimitations: [],
+      }],
     });
 
   try {
@@ -174,6 +147,7 @@ test("accepts uncertain safety and copyright findings for human review", async (
         subject: "Calculus",
         unit: "Derivatives",
         topic: "Power rule",
+        uploadedBy: testUserId,
       },
       ocrResult: {
         pages: [
@@ -196,31 +170,18 @@ test("accepts uncertain safety and copyright findings for human review", async (
   }
 });
 
-test("returns NO_ISSUE_DETECTED when no substantive issue is found", async () => {
+test("returns NO_ISSUE_DETECTED when no substantive issue is found", async (t) => {
+  mockGeminiUsage(t);
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>
-    Response.json({
-      output: [
-        {
-          content: [
-            {
-              type: "output_text",
-              text: JSON.stringify({
-                issues: [],
-                pages: [
-                  {
-                    pageNumber: 1,
-                    verifiableStatementCount: 5,
-                    analysisReliable: true,
-                    analysisLimitations: [],
-                  },
-                ],
-              }),
-              annotations: [],
-            },
-          ],
-        },
-      ],
+    geminiJsonResponse({
+      issues: [],
+      pages: [{
+        pageNumber: 1,
+        verifiableStatementCount: 5,
+        analysisReliable: true,
+        analysisLimitations: [],
+      }],
     });
 
   try {
@@ -233,6 +194,7 @@ test("returns NO_ISSUE_DETECTED when no substantive issue is found", async () =>
         subject: "Biology",
         unit: "Cells",
         topic: "Cell membrane",
+        uploadedBy: testUserId,
       },
       ocrResult: {
         pages: [
@@ -255,31 +217,18 @@ test("returns NO_ISSUE_DETECTED when no substantive issue is found", async () =>
   }
 });
 
-test("does not count statements on OCR-unreadable pages", async () => {
+test("does not count statements on OCR-unreadable pages", async (t) => {
+  mockGeminiUsage(t);
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>
-    Response.json({
-      output: [
-        {
-          content: [
-            {
-              type: "output_text",
-              text: JSON.stringify({
-                issues: [],
-                pages: [
-                  {
-                    pageNumber: 1,
-                    verifiableStatementCount: 12,
-                    analysisReliable: true,
-                    analysisLimitations: [],
-                  },
-                ],
-              }),
-              annotations: [],
-            },
-          ],
-        },
-      ],
+    geminiJsonResponse({
+      issues: [],
+      pages: [{
+        pageNumber: 1,
+        verifiableStatementCount: 12,
+        analysisReliable: true,
+        analysisLimitations: [],
+      }],
     });
 
   try {
@@ -292,6 +241,7 @@ test("does not count statements on OCR-unreadable pages", async () => {
         subject: "Physics",
         unit: "Motion",
         topic: "Velocity",
+        uploadedBy: testUserId,
       },
       ocrResult: {
         pages: [
@@ -317,9 +267,11 @@ test("does not count statements on OCR-unreadable pages", async () => {
   }
 });
 
-test("surfaces academic verification API failures for worker retry and human review handling", async () => {
+test("surfaces Gemini verification failures for worker retry and human review handling", async (t) => {
+  mockGeminiUsage(t);
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => new Response("unavailable", { status: 503 });
+  globalThis.fetch = async () =>
+    Response.json({ error: { message: "service unavailable" } }, { status: 503 });
 
   try {
     await assert.rejects(
@@ -332,6 +284,7 @@ test("surfaces academic verification API failures for worker retry and human rev
           subject: "Calculus",
           unit: "Derivatives",
           topic: "Power rule",
+          uploadedBy: testUserId,
         },
         ocrResult: {
           pages: [
@@ -346,9 +299,56 @@ test("surfaces academic verification API failures for worker retry and human rev
           ],
         },
       }),
-      /Academic verification API returned HTTP 503/,
+      /AI service is temporarily unavailable/,
     );
   } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("does not confirm factual findings without actual grounded citations", async (t) => {
+  mockGeminiUsage(t);
+  const { env } = await import("../config/env.js");
+  const originalSearchSetting = env.geminiVerificationUseGoogleSearch;
+  const originalFetch = globalThis.fetch;
+  env.geminiVerificationUseGoogleSearch = false;
+  globalThis.fetch = async () => geminiJsonResponse({
+    issues: [issue()],
+    pages: [{
+      pageNumber: 1,
+      verifiableStatementCount: 5,
+      analysisReliable: true,
+      analysisLimitations: [],
+    }],
+  });
+
+  try {
+    const result = await verifyAcademicNotes({
+      note: {
+        title: "Calculus",
+        description: "Derivative rules",
+        department: "Mathematics",
+        semester: 1,
+        subject: "Calculus",
+        unit: "Derivatives",
+        topic: "Power rule",
+        uploadedBy: testUserId,
+      },
+      ocrResult: {
+        pages: [{
+          pageNumber: 1,
+          extractedText: "The derivative of x^2 is 2x.",
+          recognizedFormulas: [],
+          readabilityStatus: "readable",
+          ocrConfidence: 0.95,
+          unclearRegions: [],
+        }],
+      },
+    });
+    assert.equal(result.report.issues[0].classification, "UNCERTAIN");
+    assert.deepEqual(result.report.issues[0].references, []);
+  } finally {
+    env.geminiVerificationUseGoogleSearch = originalSearchSetting;
     globalThis.fetch = originalFetch;
   }
 });

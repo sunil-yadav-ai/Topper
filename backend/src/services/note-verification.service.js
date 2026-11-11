@@ -1,4 +1,8 @@
 import { env } from "../config/env.js";
+import {
+  generateStructuredContent,
+  getGeminiGroundingSources,
+} from "./gemini-ai.service.js";
 
 const issueCategories = [
   "incorrect_definition",
@@ -96,29 +100,18 @@ function normalizeText(text) {
   return text.normalize("NFKC").toLocaleLowerCase().replace(/\s+/g, " ").trim();
 }
 
-function collectCitations(payload) {
+function collectCitations(response) {
   const citations = new Map();
-  for (const output of payload.output ?? []) {
-    for (const content of output.content ?? []) {
-      for (const annotation of content.annotations ?? []) {
-        if (
-          annotation.type === "url_citation" &&
-          typeof annotation.url === "string" &&
-          typeof annotation.title === "string"
-        ) {
-          try {
-            const url = new URL(annotation.url);
-            if (url.protocol === "https:") {
-              citations.set(url.href, {
-                title: annotation.title,
-                url: url.href,
-              });
-            }
-          } catch {
-            continue;
-          }
-        }
-      }
+  for (const source of getGeminiGroundingSources(response)) {
+    const url = new URL(source.url);
+    const isAllowed =
+      env.academicReferenceDomains.length === 0 ||
+      env.academicReferenceDomains.some(
+        (domain) =>
+          url.hostname === domain || url.hostname.endsWith(`.${domain}`),
+      );
+    if (isAllowed) {
+      citations.set(url.href, { title: source.title, url: url.href });
     }
   }
   return citations;
@@ -169,9 +162,6 @@ function buildReport(issues, citations) {
 }
 
 export async function verifyAcademicNotes({ note, ocrResult }) {
-  if (!env.openAiApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured.");
-  }
   if (!ocrResult?.pages?.length) {
     throw new Error("Academic verification requires completed OCR page results.");
   }
@@ -220,9 +210,10 @@ export async function verifyAcademicNotes({ note, ocrResult }) {
     "return an UNCERTAIN issue using potential_safety_concern, potential_copyright_concern, or " +
     "other_content_concern as appropriate. Do not flag ordinary facts, formulas, short phrases, " +
     "or material clearly identified as the student's own work as copyright concerns. " +
-    "Use web search to find subject-specific authoritative textbooks, academic institutions, " +
-    "standards bodies, or trusted references whenever possible. Cite the exact source URLs " +
-    "from web-search results in referenceUrls; never invent citations. Confirm an error only " +
+    "Use grounded Google Search sources, when enabled, to find subject-specific authoritative " +
+    "textbooks, academic institutions, standards bodies, or trusted references. Cite only exact " +
+    "source URLs returned in the grounded search results; never invent citations. If no grounded " +
+    "sources are available, classify potential factual errors as UNCERTAIN. Confirm an error only " +
     "when the original statement is clearly legible and reliable evidence supports a specific " +
     "correction. If OCR is unclear, sources disagree, context is missing, or you cannot verify " +
     "a claim, classify it UNCERTAIN, explain the uncertainty, and do not call it a mistake. " +
@@ -239,53 +230,19 @@ export async function verifyAcademicNotes({ note, ocrResult }) {
     "unreadable by OCR must have zero verifiable statements and analysisReliable false. Set " +
     "analysisReliable false when important context or legibility prevents a dependable review. " +
     "If no substantive issue is detected, return an empty issues array.";
-  const tools =
-    env.academicReferenceDomains.length > 0
-      ? [
-          {
-            type: "web_search",
-            filters: { allowed_domains: env.academicReferenceDomains },
-          },
-        ]
-      : [{ type: "web_search" }];
-
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.openAiApiKey}`,
-      "Content-Type": "application/json",
-    },
-    signal: AbortSignal.timeout(120000),
-    body: JSON.stringify({
-      model: env.openAiVerificationModel,
-      instructions,
-      input: JSON.stringify(userContent),
-      tools,
-      store: false,
-      text: {
-        format: {
-          type: "json_schema",
-          name: "academic_notes_verification",
-          strict: true,
-          schema: responseSchema,
-        },
-      },
-      max_output_tokens: 8000,
-    }),
+  const { result, response, model } = await generateStructuredContent({
+    feature: "verification",
+    userId: note.uploadedBy,
+    instructions,
+    contents: [{
+      role: "user",
+      parts: [{ text: JSON.stringify(userContent) }],
+    }],
+    schema: responseSchema,
+    maxOutputTokens: 8000,
+    timeoutMs: 120_000,
+    useGoogleSearch: env.geminiVerificationUseGoogleSearch,
   });
-  if (!response.ok) {
-    throw new Error(`Academic verification API returned HTTP ${response.status}.`);
-  }
-
-  const payload = await response.json();
-  const outputText = payload.output
-    ?.flatMap((item) => item.content ?? [])
-    .find((item) => item.type === "output_text")?.text;
-  if (!outputText) {
-    throw new Error("Academic verification API returned no structured report.");
-  }
-
-  const result = JSON.parse(outputText);
   if (
     !Array.isArray(result.issues) ||
     !result.issues.every((issue) => isValidIssue(issue, ocrResult.pages.length)) ||
@@ -351,7 +308,7 @@ export async function verifyAcademicNotes({ note, ocrResult }) {
 
   return {
     report: {
-      ...buildReport(validatedIssues, collectCitations(payload)),
+      ...buildReport(validatedIssues, collectCitations(response)),
       pages,
       totalVerifiableStatements: pages.reduce(
         (total, page) => total + page.verifiableStatementCount,
@@ -367,6 +324,6 @@ export async function verifyAcademicNotes({ note, ocrResult }) {
         (page) => page.readabilityStatus === "unreadable",
       ).length,
     },
-    model: env.openAiVerificationModel,
+    model,
   };
 }

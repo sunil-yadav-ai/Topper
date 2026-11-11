@@ -525,7 +525,7 @@ function EduRiseFooter({ apiStatus }) {
             <span className="ed-footer-free">FREE TO LEARN · FREE TO SHARE</span>
           </div>
           <div className="ed-footer-links">
-            <div><h2>Explore</h2><Link to="/search">Knowledge vault</Link><Link to="/pyqs">Previous-year papers</Link><Link to="/syllabus">Syllabus explorer</Link></div>
+            <div><h2>Explore</h2><Link to="/search">Knowledge vault</Link><Link to="/subjects">Study subjects</Link><Link to="/pyqs">Previous-year papers</Link><Link to="/syllabus">Syllabus explorer</Link></div>
             <div><h2>Join in</h2><Link to="/register">Share your notes</Link><Link to="/login">Student sign in</Link><Link to="/library">Your library</Link></div>
             <div><h2>About</h2><a href="#about">Our story</a><a href="#verification">Thoughtful verification</a><Link to="/terms">Terms &amp; conditions</Link></div>
             <div><h2>Privacy</h2><Link to="/advertising">Privacy &amp; advertising details</Link>{validContactEmail ? <a href={`mailto:${validContactEmail}`}>Contact Topper</a> : <span className="ed-footer-coming-soon">Contact details coming soon</span>}</div>
@@ -947,6 +947,8 @@ export default function EduRiseLanding() {
           </button>
           <nav aria-label="Main navigation" className={`ed-nav ${menuOpen ? "ed-nav-open" : ""}`}>
             <a href="#explore" onClick={() => setMenuOpen(false)}>Explore</a>
+            <Link to="/subjects" onClick={() => setMenuOpen(false)}>Subjects</Link>
+            <Link to="/pyqs" onClick={() => setMenuOpen(false)}>Question papers</Link>
             <a href="#verification" onClick={() => setMenuOpen(false)}>How we check</a>
             <a href="#contributors" onClick={() => setMenuOpen(false)}>Our people</a>
             {user?.username && (

@@ -9,7 +9,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     api
-      .get("/auth/me")
+      .get("/auth/me", { pageLoading: false })
       .then(({ data }) => setUser(data.user))
       .catch((error) => {
         if (error.response?.status !== 401) {

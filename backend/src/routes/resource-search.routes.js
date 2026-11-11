@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getResourceSearchOptionsCollection,
+  getResourceViewInfo,
   markSearchResultHelpful,
   searchResourceCollection,
   suggestResourceCollection,
@@ -22,6 +23,12 @@ resourceSearchRouter.get(
   "/resources/note/:resourceId/preview",
   optionalAuth,
   viewNotePreview,
+);
+resourceSearchRouter.get(
+  "/resources/:resourceType/:resourceId/view-info",
+  requireAuth,
+  requireRole("user", "admin"),
+  getResourceViewInfo,
 );
 resourceSearchRouter.get(
   "/resources/:resourceType/:resourceId/view",

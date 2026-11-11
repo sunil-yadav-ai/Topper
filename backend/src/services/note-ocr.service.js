@@ -1,6 +1,6 @@
 import { PDFDocument } from "pdf-lib";
-import { env } from "../config/env.js";
 import { decryptJson, encryptJson } from "./encrypted-json.service.js";
+import { generateStructuredContent } from "./gemini-ai.service.js";
 import { getPrivateNoteDownloadUrl } from "./note-storage.service.js";
 
 const maxPdfPages = 100;
@@ -68,11 +68,7 @@ export async function splitPdfIntoPages(pdfBytes) {
   return pages;
 }
 
-async function callVisionModel(page) {
-  if (!env.openAiApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured.");
-  }
-
+async function callVisionModel(page, userId) {
   const instruction =
     "Read this handwritten academic-notes page. Transcribe only text you can actually read; " +
     "do not guess, correct, or complete unclear words, formulas, or statements. " +
@@ -82,86 +78,32 @@ async function callVisionModel(page) {
     "separately in recognizedFormulas, preserving their notation as closely as possible. " +
     `This is source page ${page.pageNumber}; return that exact pageNumber. ` +
     "Set ocrConfidence between 0 (no confidence) and 1 (high confidence) for the page transcription.";
-  const content = [{ type: "input_text", text: instruction }];
-
-  if (page.mimeType === "application/pdf") {
-    content.push({
-      type: "input_file",
-      filename: `page-${page.pageNumber}.pdf`,
-      file_data: `data:application/pdf;base64,${page.bytes.toString("base64")}`,
-    });
-  } else {
-    content.push({
-      type: "input_image",
-      image_url: `data:${page.mimeType};base64,${page.bytes.toString("base64")}`,
-      detail: "high",
-    });
-  }
-
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.openAiApiKey}`,
-      "Content-Type": "application/json",
-    },
-    signal: AbortSignal.timeout(90000),
-    body: JSON.stringify({
-      model: env.openAiOcrModel,
-      input: [{ role: "user", content }],
-      store: false,
-      text: {
-        format: {
-          type: "json_schema",
-          name: "handwritten_note_page",
-          strict: true,
-          schema: pageSchema,
-        },
-      },
-      max_output_tokens: 3000,
-    }),
-  });
-  if (!response.ok) {
-    const error = new Error(`Vision API returned HTTP ${response.status}.`);
-    if (response.status === 429) {
-      let providerErrorCode;
-      try {
-        const payload = await response.json();
-        providerErrorCode = payload.error?.code ?? payload.error?.type;
-      } catch (parseError) {
-        if (!(parseError instanceof SyntaxError)) throw parseError;
-      }
-      error.providerErrorCode = providerErrorCode;
-      if (typeof providerErrorCode === "string") {
-        error.message = `Vision API returned HTTP 429 (${providerErrorCode}).`;
-      }
-      error.retryableRateLimit = ![
-        "insufficient_quota",
-        "billing_hard_limit_reached",
-        "credit_balance_exhausted",
-      ].includes(providerErrorCode);
-      const retryAfter = response.headers.get("retry-after");
-      if (retryAfter !== null) {
-        const retryAfterSeconds = Number(retryAfter);
-        const retryAfterDate = Date.parse(retryAfter);
-        if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0) {
-          error.retryAfterMs = retryAfterSeconds * 1000;
-        } else if (Number.isFinite(retryAfterDate)) {
-          error.retryAfterMs = Math.max(0, retryAfterDate - Date.now());
-        }
-      }
-    }
+  if (!["application/pdf", "image/jpeg", "image/png"].includes(page.mimeType)) {
+    const error = new Error("The stored note uses an unsupported file format.");
+    error.statusCode = 415;
+    error.expose = true;
     throw error;
   }
 
-  const payload = await response.json();
-  const outputText = payload.output
-    ?.flatMap((item) => item.content ?? [])
-    .find((item) => item.type === "output_text")?.text;
-  if (!outputText) {
-    throw new Error("Vision API returned no structured OCR result.");
-  }
-
-  const result = JSON.parse(outputText);
+  const { result } = await generateStructuredContent({
+    feature: "ocr",
+    userId,
+    contents: [{
+      role: "user",
+      parts: [
+        { text: instruction },
+        {
+          inlineData: {
+            mimeType: page.mimeType,
+            data: page.bytes.toString("base64"),
+          },
+        },
+      ],
+    }],
+    schema: pageSchema,
+    maxOutputTokens: 3000,
+    timeoutMs: 90_000,
+  });
   if (
     result.pageNumber !== page.pageNumber ||
     typeof result.extractedText !== "string" ||
@@ -172,12 +114,15 @@ async function callVisionModel(page) {
     result.ocrConfidence > 1 ||
     !Array.isArray(result.unclearRegions)
   ) {
-    throw new Error(`Vision API returned invalid structured OCR for page ${page.pageNumber}.`);
+    const error = new Error(`AI service returned invalid OCR for page ${page.pageNumber}.`);
+    error.statusCode = 502;
+    error.expose = true;
+    throw error;
   }
   return result;
 }
 
-export async function extractNoteText(note, beforePage) {
+export async function extractNoteText(note, beforePage, userId = note.uploadedBy) {
   const source = await getSourceFile(note);
   const pages =
     note.storage.format === "pdf"
@@ -193,7 +138,7 @@ export async function extractNoteText(note, beforePage) {
   const result = [];
   for (const page of pages) {
     if (beforePage) await beforePage();
-    result.push(await callVisionModel(page));
+    result.push(await callVisionModel(page, userId));
   }
 
   return { pages: result };

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGSAP } from "@gsap/react";
 import {
   ArrowLeft,
@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { api } from "../lib/api.js";
 import { gsap } from "../lib/gsap.js";
+import { useAuth } from "../context/AuthContext.jsx";
 
 gsap.registerPlugin(useGSAP);
 
@@ -28,37 +29,23 @@ const difficultyLabels = {
   hard: "Hard",
   advanced: "Advanced",
 };
+const answerTimeOptions = [10, 15, 20, 30, 45, 60, 90, 120];
 
 function errorText(error) {
   return error.response?.data?.message ?? error.message ?? "AI Practice is unavailable right now.";
 }
 
-function unique(values) {
-  const uniqueValues = new Map();
-  for (const value of values.filter(Boolean)) {
-    const key = String(value).trim().toLocaleLowerCase();
-    if (!uniqueValues.has(key)) uniqueValues.set(key, value);
-  }
-  return [...uniqueValues.values()].sort((left, right) => left.localeCompare(right));
-}
-
-function sameOption(left, right) {
-  return String(left ?? "").trim().toLocaleLowerCase() ===
-    String(right ?? "").trim().toLocaleLowerCase();
-}
-
-function SelectField({ label, value, options, onChange, disabled, placeholder = "Select…" }) {
+function StudyField({ label, value, onChange, placeholder, maxLength = 160 }) {
   return (
     <label className="practice-field">
       <span>{label}</span>
-      <select disabled={disabled} onChange={(event) => onChange(event.target.value)} value={value}>
-        <option value="">{placeholder}</option>
-        {options.map((option) => (
-          <option key={String(option.value ?? option)} value={option.value ?? option}>
-            {option.label ?? option}
-          </option>
-        ))}
-      </select>
+      <input
+        maxLength={maxLength}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        required
+        value={value}
+      />
     </label>
   );
 }
@@ -96,8 +83,12 @@ function PracticeHistory({ sessions, onAgain }) {
 
 export default function AiPracticePage() {
   const rootRef = useRef(null);
-  const [options, setOptions] = useState([]);
-  const [selection, setSelection] = useState({ department: "", course: "", semester: "", subject: "", topic: "" });
+  const { user } = useAuth();
+  const [selection, setSelection] = useState({
+    department: user?.department ?? "",
+    subject: "",
+    answerTimeSeconds: 20,
+  });
   const [session, setSession] = useState(null);
   const [report, setReport] = useState(null);
   const [history, setHistory] = useState([]);
@@ -119,42 +110,19 @@ export default function AiPracticePage() {
 
   useEffect(() => {
     let active = true;
-    Promise.allSettled([api.get("/ai-practice/options"), api.get("/ai-practice/history")])
-      .then(([optionsResult, historyResult]) => {
+    api.get("/ai-practice/history")
+      .then(({ data }) => {
         if (!active) return;
-        if (optionsResult.status === "fulfilled") {
-          const optionsData = optionsResult.value.data;
-          setOptions(optionsData.options ?? []);
-          setSelection((current) => ({
-            ...current,
-            department: optionsData.defaults?.department ?? "",
-            course: optionsData.defaults?.course ?? "",
-            semester: optionsData.defaults?.semester ? String(optionsData.defaults.semester) : "",
-          }));
-        } else {
-          setError(errorText(optionsResult.reason));
-        }
-        if (historyResult.status === "fulfilled") {
-          setHistory(historyResult.value.data.sessions ?? []);
-        } else if (optionsResult.status === "fulfilled") {
-          setError(errorText(historyResult.reason));
-        }
+        setHistory(data.sessions ?? []);
+      })
+      .catch((requestError) => {
+        if (active) setError(errorText(requestError));
       })
       .finally(() => {
         if (active) setLoading(false);
       });
     return () => { active = false; };
   }, []);
-
-  const departments = useMemo(() => unique([
-    ...options.map((option) => option.department),
-    selection.department,
-  ]), [options, selection.department]);
-  const subjects = useMemo(() => unique(options.filter((option) =>
-    sameOption(option.department, selection.department) &&
-    (!selection.course || !option.course || sameOption(option.course, selection.course)) &&
-    (!selection.semester || String(option.semester) === selection.semester)
-  ).map((option) => option.subject)), [options, selection]);
 
   useGSAP(() => {
     const root = rootRef.current;
@@ -197,12 +165,7 @@ export default function AiPracticePage() {
   function changeSelection(field, value) {
     setError("");
     setNotice("");
-    setSelection((current) => ({
-      ...current,
-      [field]: value,
-      ...(field === "department" ? { subject: "", topic: "" } : {}),
-      ...(field === "subject" ? { topic: "" } : {}),
-    }));
+    setSelection((current) => ({ ...current, [field]: value }));
   }
 
   async function loadHistory() {
@@ -219,8 +182,9 @@ export default function AiPracticePage() {
     setQuestionPhase("waiting");
     try {
       const { data } = await api.post("/ai-practice/sessions", {
-        ...nextSelection,
-        semester: Number(nextSelection.semester),
+        department: nextSelection.department,
+        subject: nextSelection.subject,
+        answerTimeSeconds: nextSelection.answerTimeSeconds,
       });
       if (!data.available) {
         setNotice(data.message);
@@ -412,10 +376,8 @@ export default function AiPracticePage() {
   function practiceAgain(previousSession = session) {
     const previousSelection = previousSession ? {
       department: previousSession.department,
-      course: previousSession.course,
-      semester: String(previousSession.semester),
       subject: previousSession.subject,
-      topic: previousSession.topic ?? "",
+      answerTimeSeconds: previousSession.answerTimeSeconds ?? 20,
     } : selection;
     setSelection(previousSelection);
     setSession(null);
@@ -465,14 +427,14 @@ export default function AiPracticePage() {
         )}
 
         {loading ? (
-          <div className="practice-loading"><LoaderCircle aria-hidden="true" className="practice-spin" /> Finding your subjects…</div>
+          <div className="practice-loading"><LoaderCircle aria-hidden="true" className="practice-spin" /> Loading practice history…</div>
         ) : report ? (
           <section aria-labelledby="practice-report-title" className="practice-report">
             <div className="practice-report-head">
               <span className="practice-report-mark"><Check aria-hidden="true" /></span>
               <p className="practice-eyebrow">SESSION COMPLETE</p>
               <h2 id="practice-report-title">Look how far you got.</h2>
-              <p>{selection.subject}{selection.topic ? ` · ${selection.topic}` : ""} · {selection.course}</p>
+              <p>{selection.subject} · {selection.department}</p>
             </div>
             <div className="practice-report-stats">
               <div><strong>{report.totalAttempted}</strong><span>Questions attempted</span></div>
@@ -532,13 +494,13 @@ export default function AiPracticePage() {
                       aria-label={`${countdownSeconds} seconds remaining`}
                       className="practice-answer-progress"
                       role="progressbar"
-                      aria-valuemax="20"
+                      aria-valuemax={session.answerTimeSeconds ?? 20}
                       aria-valuemin="0"
                       aria-valuenow={countdownSeconds}
                     >
                       <span
                         className="practice-answer-progress-fill"
-                        style={{ transform: `scaleX(${Math.max(0, Math.min(1, remainingMs / 20_000))})` }}
+                        style={{ transform: `scaleX(${Math.max(0, Math.min(1, remainingMs / ((session.answerTimeSeconds ?? 20) * 1000)))})` }}
                       />
                     </div>
                   </div>
@@ -620,18 +582,26 @@ export default function AiPracticePage() {
             </div>
             <div className="practice-selection-card">
               <div className="practice-selection-grid">
-                <SelectField label="Department" onChange={(value) => changeSelection("department", value)} options={departments} value={selection.department} />
-                <SelectField label="Subject" onChange={(value) => changeSelection("subject", value)} options={subjects} value={selection.subject} disabled={!selection.department} />
+                <StudyField label="Department" maxLength={120} onChange={(value) => changeSelection("department", value)} placeholder="e.g. Computer Science" value={selection.department} />
+                <StudyField label="Subject" onChange={(value) => changeSelection("subject", value)} placeholder="Enter any subject, e.g. Python" value={selection.subject} />
+                <label className="practice-field">
+                  <span>Answer time per question</span>
+                  <select
+                    onChange={(event) => changeSelection("answerTimeSeconds", Number(event.target.value))}
+                    value={selection.answerTimeSeconds}
+                  >
+                    {answerTimeOptions.map((seconds) => (
+                      <option key={seconds} value={seconds}>{seconds} seconds</option>
+                    ))}
+                  </select>
+                </label>
               </div>
-              <p className="practice-source-note"><BookOpen aria-hidden="true" size={15} /> Questions use your department, subject, and available learning material. Topics are chosen for you.</p>
+              <p className="practice-source-note"><BookOpen aria-hidden="true" size={15} /> Enter any department and subject, then choose how long you get for each answer. The timer starts when the answer choices appear. When matching notes are available, your tutor uses them; otherwise, it starts with general subject knowledge.</p>
               <button className="practice-primary-button practice-start-button" disabled={!canStart || busy !== ""} onClick={() => startPractice()} type="button">
                 {busy === "start" ? <LoaderCircle aria-hidden="true" className="practice-spin" size={18} /> : <Sparkles aria-hidden="true" size={18} />}
                 {busy === "start" ? "Preparing your first question…" : "Start practice"}
                 {busy !== "start" && <ArrowRight aria-hidden="true" size={17} />}
               </button>
-              {options.length === 0 && (
-                <p className="practice-no-options">No subjects are available yet. Upload a note or complete a syllabus analysis to get started.</p>
-              )}
             </div>
           </section>
         )}

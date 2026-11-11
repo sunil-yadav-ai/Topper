@@ -90,6 +90,7 @@ const learningSessionSchema = new mongoose.Schema(
       default: "active",
       index: true,
     },
+    totalQuestions: { type: Number, min: 10, max: 10, default: 10 },
     currentDifficulty: {
       type: String,
       enum: ["easy", "medium", "hard", "advanced"],

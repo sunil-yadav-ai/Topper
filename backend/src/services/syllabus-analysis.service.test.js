@@ -2,8 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { StandardFonts, PDFDocument } from "pdf-lib";
 
-process.env.OPENAI_API_KEY = "test-api-key";
-process.env.OPENAI_SYLLABUS_MODEL = "test-syllabus-model";
+process.env.GEMINI_API_KEY = "test-api-key";
+process.env.GEMINI_SYLLABUS_MODEL = "test-syllabus-model";
+import {
+  geminiJsonResponse,
+  isGeminiRequest,
+  mockGeminiUsage,
+} from "../test/gemini-test-helpers.js";
 const {
   extractAndOrganizeSyllabus,
   normalizeSyllabusStructure,
@@ -30,6 +35,7 @@ const onePageSyllabus = {
     },
   ],
 };
+const testUserId = "507f1f77bcf86cd799439011";
 
 test("validates syllabus extensions, MIME types, and file signatures", () => {
   assert.deepEqual(
@@ -58,6 +64,15 @@ test("validates syllabus extensions, MIME types, and file signatures", () => {
       }),
     /contents do not match/,
   );
+  assert.throws(
+      () =>
+        validateSyllabusFile({
+          originalname: "large.pdf",
+          mimetype: "application/pdf",
+          buffer: Buffer.alloc(10 * 1024 * 1024 + 1),
+        }),
+      /between 1 byte and 10 MB/,
+  );
 });
 
 test("splits syllabus PDFs into individually numbered source pages", async () => {
@@ -67,6 +82,17 @@ test("splits syllabus PDFs into individually numbered source pages", async () =>
   const pages = await splitSyllabusPdfIntoPages(Buffer.from(await document.save()));
   assert.deepEqual(pages.map((page) => page.pageNumber), [1, 2]);
   assert.ok(pages.every((page) => page.mimeType === "application/pdf"));
+});
+
+test("rejects syllabus PDFs above the supported page limit", async () => {
+  const document = await PDFDocument.create();
+  for (let pageNumber = 0; pageNumber < 51; pageNumber += 1) {
+    document.addPage();
+  }
+  await assert.rejects(
+    splitSyllabusPdfIntoPages(Buffer.from(await document.save())),
+    /between 1 and 50 pages/,
+  );
 });
 
 test("normalizes student-confirmed structure and rejects invalid topic names", () => {
@@ -90,10 +116,14 @@ test("normalizes student-confirmed structure and rejects invalid topic names", (
   );
 });
 
-test("uses backend vision OCR and structured syllabus extraction", async () => {
+test("uses backend Gemini OCR and structured syllabus extraction", async (t) => {
+  mockGeminiUsage(t);
   const originalFetch = globalThis.fetch;
   const requests = [];
-  globalThis.fetch = async (_url, options) => {
+  const requestUrls = [];
+  globalThis.fetch = async (url, options) => {
+    assert.ok(isGeminiRequest(url));
+    requestUrls.push(String(url));
     const request = JSON.parse(options.body);
     requests.push(request);
     const result = requests.length === 1
@@ -103,9 +133,7 @@ test("uses backend vision OCR and structured syllabus extraction", async () => {
           readabilityStatus: "readable",
         }
       : onePageSyllabus;
-    return Response.json({
-      output: [{ content: [{ type: "output_text", text: JSON.stringify(result) }] }],
-    });
+    return geminiJsonResponse(result);
   };
 
   try {
@@ -116,20 +144,54 @@ test("uses backend vision OCR and structured syllabus extraction", async () => {
         buffer: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
       },
       "png",
+      testUserId,
     );
     assert.deepEqual(result.structure, onePageSyllabus);
     assert.equal(result.pages[0].pageNumber, 1);
-    assert.match(requests[0].input[0].content[0].text, /transcribe the syllabus/i);
-    assert.equal(requests[0].input[0].content[1].type, "input_image");
-    assert.match(requests[1].input[0].content[0].text, /do not infer or invent/i);
-    assert.equal(requests[0].store, false);
-    assert.equal(requests[0].model, "test-syllabus-model");
+    assert.match(requests[0].contents[0].parts[0].text, /transcribe the syllabus/i);
+    assert.equal(requests[0].contents[0].parts[1].inlineData.mimeType, "image/png");
+    assert.match(requests[1].contents[0].parts[0].text, /do not infer or invent/i);
+    assert.equal(requests[0].generationConfig.responseMimeType, "application/json");
+    assert.equal(requests[0].generationConfig.responseJsonSchema.properties.pageNumber.type, "integer");
+    assert.match(requestUrls[0], /test-syllabus-model/);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test("extracts selectable PDF text and OCRs only scanned pages without skipping them", async () => {
+test("reports exhausted Gemini quota clearly for syllabus OCR", async (t) => {
+  mockGeminiUsage(t);
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => Response.json(
+    { error: { message: "The daily quota for requests is exhausted." } },
+    { status: 429 },
+  );
+
+  try {
+    await assert.rejects(
+      extractAndOrganizeSyllabus(
+        {
+          originalname: "course.png",
+          mimetype: "image/png",
+          buffer: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+        },
+        "png",
+        testUserId,
+      ),
+      (error) => {
+        assert.equal(error.statusCode, 503);
+        assert.match(error.message, /Gemini usage is temporarily exhausted/i);
+        assert.equal(error.retryableRateLimit, false);
+        return true;
+      },
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("extracts selectable PDF text and OCRs only scanned pages without skipping them", async (t) => {
+  mockGeminiUsage(t);
   const document = await PDFDocument.create();
   const font = await document.embedFont(StandardFonts.Helvetica);
   document.addPage().drawText(
@@ -140,38 +202,31 @@ test("extracts selectable PDF text and OCRs only scanned pages without skipping 
   const pdfBytes = Buffer.from(await document.save());
   const originalFetch = globalThis.fetch;
   const requests = [];
-  globalThis.fetch = async (_url, options) => {
+  globalThis.fetch = async (url, options) => {
+    assert.ok(isGeminiRequest(url));
     const request = JSON.parse(options.body);
     requests.push(request);
-    const isPageOcr = request.text.format.name === "syllabus_page_ocr";
+    const pageParts = request.contents[0].parts;
+    const isPageOcr = /Transcribe the syllabus/i.test(pageParts[0].text);
     if (isPageOcr) {
-      const sourceFile = request.input[0].content.find((item) => item.type === "input_file");
-      assert.equal(sourceFile.filename, "syllabus-page-2.pdf");
-      return Response.json({
-        output: [{
-          content: [{
-            type: "output_text",
-            text: JSON.stringify({
-              pageNumber: 2,
-              extractedText: "Unit 2: 2D transformations",
-              readabilityStatus: "readable",
-            }),
-          }],
-        }],
+      assert.equal(pageParts[1].inlineData.mimeType, "application/pdf");
+      return geminiJsonResponse({
+        pageNumber: 2,
+        extractedText: "Unit 2: 2D transformations",
+        readabilityStatus: "readable",
       });
     }
-    const sourceText = request.input[0].content[0].text;
+    const sourceText = pageParts[0].text;
     assert.match(sourceText, /Computer Graphics/);
     assert.match(sourceText, /Unit 2: 2D transformations/);
-    return Response.json({
-      output: [{ content: [{ type: "output_text", text: JSON.stringify(onePageSyllabus) }] }],
-    });
+    return geminiJsonResponse(onePageSyllabus);
   };
 
   try {
     const result = await extractAndOrganizeSyllabus(
       { originalname: "bca-syllabus.pdf", mimetype: "application/pdf", buffer: pdfBytes },
       "pdf",
+      testUserId,
     );
     assert.equal(requests.length, 2);
     assert.equal(result.pages.length, 2);
@@ -183,19 +238,13 @@ test("extracts selectable PDF text and OCRs only scanned pages without skipping 
   }
 });
 
-test("rejects unreadable pages instead of returning an incomplete outline", async () => {
+test("rejects unreadable pages instead of returning an incomplete outline", async (t) => {
+  mockGeminiUsage(t);
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => Response.json({
-    output: [{
-      content: [{
-        type: "output_text",
-        text: JSON.stringify({
-          pageNumber: 1,
-          extractedText: "",
-          readabilityStatus: "unreadable",
-        }),
-      }],
-    }],
+  globalThis.fetch = async () => geminiJsonResponse({
+    pageNumber: 1,
+    extractedText: "",
+    readabilityStatus: "unreadable",
   });
   try {
     await assert.rejects(
@@ -206,6 +255,7 @@ test("rejects unreadable pages instead of returning an incomplete outline", asyn
           buffer: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
         },
         "png",
+        testUserId,
       ),
       /Could not read syllabus page 1/,
     );
@@ -214,12 +264,13 @@ test("rejects unreadable pages instead of returning an incomplete outline", asyn
   }
 });
 
-test("organizes large source text in chunks and merges repeated syllabus units", async () => {
+test("organizes large source text in chunks and merges repeated syllabus units", async (t) => {
+  mockGeminiUsage(t);
   const originalFetch = globalThis.fetch;
   const prompts = [];
   globalThis.fetch = async (_url, options) => {
     const request = JSON.parse(options.body);
-    prompts.push(request.input[0].content[0].text);
+    prompts.push(request.contents[0].parts[0].text);
     const result = prompts.length === 1
       ? {
           ...onePageSyllabus,
@@ -232,16 +283,14 @@ test("organizes large source text in chunks and merges repeated syllabus units",
           }],
         }
       : onePageSyllabus;
-    return Response.json({
-      output: [{ content: [{ type: "output_text", text: JSON.stringify(result) }] }],
-    });
+    return geminiJsonResponse(result);
   };
 
   try {
     const structure = await organizeSyllabusPages([
       { pageNumber: 1, extractedText: `First page\n${"context ".repeat(1700)}` },
       { pageNumber: 2, extractedText: "Unit 1: Differentiation\nChain rule" },
-    ]);
+    ], testUserId);
     assert.ok(prompts.length > 1);
     assert.match(prompts[0], /First page/);
     assert.ok(prompts.some((prompt) => /Unit 1: Differentiation/.test(prompt)));
@@ -251,30 +300,35 @@ test("organizes large source text in chunks and merges repeated syllabus units",
   }
 });
 
-test("reports invalid AI JSON rather than presenting an empty syllabus", async () => {
+test("reports invalid Gemini JSON rather than presenting an empty syllabus", async (t) => {
+  mockGeminiUsage(t);
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => Response.json({
-    output: [{ content: [{ type: "output_text", text: "not-json" }] }],
+    candidates: [{
+      content: { parts: [{ text: "not-json" }] },
+    }],
   });
   try {
     await assert.rejects(
-      organizeSyllabusPages([{ pageNumber: 1, extractedText: "Computer Graphics" }]),
-      /AI service returned invalid organized_syllabus/,
+      organizeSyllabusPages(
+        [{ pageNumber: 1, extractedText: "Computer Graphics" }],
+        testUserId,
+      ),
+      /AI service returned an invalid response/,
     );
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test("regenerates an outline from the stored syllabus OCR text", async () => {
+test("regenerates an outline from the stored syllabus OCR text", async (t) => {
+  mockGeminiUsage(t);
   const originalFetch = globalThis.fetch;
   let promptText = "";
   globalThis.fetch = async (_url, options) => {
     const request = JSON.parse(options.body);
-    promptText = request.input[0].content[0].text;
-    return Response.json({
-      output: [{ content: [{ type: "output_text", text: JSON.stringify(onePageSyllabus) }] }],
-    });
+    promptText = request.contents[0].parts[0].text;
+    return geminiJsonResponse(onePageSyllabus);
   };
 
   try {
@@ -283,7 +337,7 @@ test("regenerates an outline from the stored syllabus OCR text", async () => {
         pageNumber: 2,
         extractedText: "Actual syllabus heading\nUnit 1: Differentiation\nChain rule",
       },
-    ]);
+    ], testUserId);
     assert.deepEqual(structure, onePageSyllabus);
     assert.match(promptText, /Actual syllabus heading/);
     assert.match(promptText, /do not infer or invent/i);

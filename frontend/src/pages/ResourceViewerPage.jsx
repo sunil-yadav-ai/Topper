@@ -36,7 +36,6 @@ export default function ResourceViewerPage() {
   const activityRecordRef = useRef("");
   const activityOpenIdRef = useRef(crypto.randomUUID());
   const { user } = useAuth();
-  const [file, setFile] = useState(null);
   const [fileUrl, setFileUrl] = useState("");
   const [format, setFormat] = useState("");
   const [uploaderName, setUploaderName] = useState("");
@@ -77,70 +76,65 @@ export default function ResourceViewerPage() {
     activityOpenIdRef.current = crypto.randomUUID();
     let active = true;
     let nextUrl = "";
+    let loadingTask;
     setLoading(true);
     setError("");
     setDocument(null);
-    setFile(null);
     setFileUrl("");
     setUploaderName("");
 
-    api.get(`/search/resources/${resourceType}/${resourceId}/view`, {
-      responseType: "blob",
-      timeout: 60000,
-    })
-      .then(({ data, headers }) => {
+    async function openResource() {
+      try {
+        const { data: info } = await api.get(
+          `/search/resources/${resourceType}/${resourceId}/view-info`,
+        );
         if (!active) return;
-        const resourceFormat = headers["x-resource-format"] ?? "";
+        const resourceFormat = info.resource.format ?? "";
+        setFormat(resourceFormat);
+        setUploaderName(info.resource.uploaderName ?? "");
         if (!["pdf", "jpg", "jpeg", "png"].includes(resourceFormat)) {
           throw new Error("The resource file format is not supported.");
         }
-        nextUrl = URL.createObjectURL(data);
-        setFile(data);
-        setFileUrl(nextUrl);
-        setFormat(resourceFormat);
-        try {
-          setUploaderName(decodeURIComponent(headers["x-resource-uploader"] ?? ""));
-        } catch {
-          setUploaderName("");
+
+        if (resourceFormat === "pdf") {
+          const resourceUrl = `${api.defaults.baseURL.replace(/\/+$/, "")}/search/resources/${encodeURIComponent(resourceType)}/${encodeURIComponent(resourceId)}/view`;
+          loadingTask = getDocument({
+            url: resourceUrl,
+            withCredentials: true,
+            rangeChunkSize: 64 * 1024,
+            disableAutoFetch: true,
+            disableStream: true,
+          });
+          const pdf = await loadingTask.promise;
+          if (!active) return;
+          setDocument(pdf);
+          setPageNumber(1);
+        } else {
+          const { data: image } = await api.get(
+            `/search/resources/${resourceType}/${resourceId}/view`,
+            { responseType: "blob" },
+          );
+          if (!active) return;
+          nextUrl = URL.createObjectURL(image);
+          setFileUrl(nextUrl);
         }
-      })
-      .catch((requestError) => {
-        if (active) setError(messageFrom(requestError));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+        setLoading(false);
+      } catch (requestError) {
+        if (active) {
+          setError(messageFrom(requestError));
+          setLoading(false);
+        }
+      }
+    }
+
+    void openResource();
 
     return () => {
       active = false;
       if (nextUrl) URL.revokeObjectURL(nextUrl);
-    };
-  }, [resourceId, resourceType]);
-
-  useEffect(() => {
-    if (!file || format !== "pdf") return undefined;
-    let active = true;
-    let loadingTask;
-    file.arrayBuffer()
-      .then((buffer) => {
-        if (!active) return null;
-        loadingTask = getDocument({ data: new Uint8Array(buffer) });
-        return loadingTask.promise;
-      })
-      .then((pdf) => {
-        if (active && pdf) {
-          setDocument(pdf);
-          setPageNumber(1);
-        }
-      })
-      .catch((requestError) => {
-        if (active) setError(messageFrom(requestError));
-      });
-    return () => {
-      active = false;
       void loadingTask?.destroy();
     };
-  }, [file, format]);
+  }, [resourceId, resourceType]);
 
   useEffect(() => {
     if (!document || !canvasRef.current) return undefined;

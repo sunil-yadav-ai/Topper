@@ -156,7 +156,11 @@ export async function uploadSyllabus(request, response) {
   }
 
   try {
-    const extracted = await extractAndOrganizeSyllabus(request.file, fileInfo.format);
+    const extracted = await extractAndOrganizeSyllabus(
+      request.file,
+      fileInfo.format,
+      request.user._id,
+    );
     analysis.pageCount = extracted.pages.length;
     analysis.status = "review";
     analysis.processingError = undefined;
@@ -242,7 +246,10 @@ export async function regenerateSyllabusStructure(request, response) {
   }
   const data = decryptJson(analysis.encryptedAnalysis);
   try {
-    data.structure = await organizeSyllabusPages(data.pages ?? []);
+    data.structure = await organizeSyllabusPages(
+      data.pages ?? [],
+      request.user._id,
+    );
     data.resources = null;
     analysis.status = "review";
     analysis.processingError = undefined;

@@ -4,6 +4,9 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import "./index.css";
+import { resetMainIntroForDocument } from "./lib/loading-session.js";
+
+resetMainIntroForDocument();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

@@ -64,6 +64,7 @@ const practiceSessionSchema = new mongoose.Schema(
     semester: { type: Number, required: true, min: 1, max: 12 },
     subject: { type: String, required: true, maxlength: 160 },
     topic: { type: String, maxlength: 240, default: "" },
+    answerTimeSeconds: { type: Number, min: 5, max: 120, default: 20 },
     status: { type: String, enum: ["active", "completed"], default: "active", index: true },
     currentDifficulty: { type: String, enum: ["easy", "medium", "hard", "advanced"], default: "easy" },
     highestDifficulty: { type: String, enum: ["easy", "medium", "hard", "advanced"], default: "easy" },

@@ -19,6 +19,7 @@ import profileRouter from "./routes/profile.routes.js";
 import learningTutorRouter from "./routes/learning-tutor.routes.js";
 import learningActivityRouter from "./routes/learning-activity.routes.js";
 import aiPracticeRouter from "./routes/ai-practice.routes.js";
+import seoRouter from "./routes/seo.routes.js";
 
 const app = express();
 
@@ -41,6 +42,7 @@ app.use(
 app.use(helmet());
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
+app.use(seoRouter);
 app.get("/", (_request, response) => {
   response.json({ name: "Student Academic Resource Sharing API" });
 });
