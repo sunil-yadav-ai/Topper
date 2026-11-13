@@ -1,10 +1,9 @@
 # Student Academic Resource Sharing Platform
 
-This repository contains a MERN starter with independent `frontend` and
-`backend` workspaces. It includes a Vite/React UI, Tailwind CSS, an Express API,
-MongoDB/Mongoose, student and admin authentication, Nodemailer email
-notifications, password recovery, and private handwritten-note upload and OCR
-workflows.
+This repository contains a Next.js JavaScript application with a Tailwind CSS
+UI and native Next.js Route Handler APIs, backed by MongoDB/Mongoose. There is
+no Express server; API requests, authentication, email notifications, password
+recovery, uploads, and OCR workflows run in the Next.js Node.js runtime.
 
 ## Requirements
 
@@ -17,14 +16,17 @@ workflows.
 1. Copy `backend/.env.example` to `backend/.env`.
 2. Set `MONGODB_URI` if needed and generate a private `JWT_SECRET` of at least
    32 characters (for example, `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`).
+   Set `FRONTEND_URL` to `http://localhost:3000` for local email links; the
+   default already uses the Next.js development origin.
 3. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`,
    `SMTP_PASSWORD`, and `EMAIL_FROM` in `backend/.env` for email notifications.
    Gmail defaults to `smtp.gmail.com:587` with STARTTLS; use a Google App
    Password for `SMTP_PASSWORD`. Run
    `npm run test-email --workspace=backend` to test SMTP connectivity without
    sending an email.
-4. Copy `frontend/.env.example` to `frontend/.env` if the API is not at
-   `http://localhost:5000/api`.
+4. Copy `frontend/.env.example` to `frontend/.env` to configure the optional
+   public settings. Keep secrets such as API keys in `backend/.env`, never in
+   `NEXT_PUBLIC_*` variables.
 5. Configure `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and
    `CLOUDINARY_API_SECRET` in `backend/.env` to enable private note uploads.
 6. Create a Gemini API key in
@@ -45,11 +47,13 @@ workflows.
    Review your active Google AI Studio project quotas; Gemini Free Tier is not
    unlimited.
 9. Run `npm install` from the repository root.
-10. Run `npm run dev` to start the API and frontend together.
+10. Run `npm run dev` to start the Next.js application.
 
-The frontend is served by Vite at `http://localhost:5173`. The API listens at
-`http://localhost:5000`; its `GET /api/health` endpoint reports server and
-database readiness. Use `npm run build` to build the frontend.
+The Next.js application serves the frontend and API at `http://localhost:3000`;
+its `GET /api/health` endpoint reports server and database readiness. Use
+`npm run build` to build the application and `npm start` to run the production
+build. API route handlers use Web `Request`/`Response` objects and initialize
+MongoDB and the OCR worker inside the Next.js runtime.
 
 ## Frontend loading behavior
 
@@ -65,25 +69,30 @@ database readiness. Use `npm run build` to build the frontend.
 
 ## Search engine optimization
 
-- The frontend uses React 19, Vite, and React Router; the Express/Mongoose API
-  provides server-rendered, crawlable HTML for public resource, subject, and
-  topic URLs. Vite proxies `/robots.txt`, `/sitemap.xml`, `/notes`,
-  `/question-papers`, and `/subjects` to the API during local development and
-  preview.
+- The frontend uses explicit Next.js App Router pages with native `Link`,
+  `useRouter`, and `usePathname` navigation. Public subject and resource pages
+  render on the server and generate canonical, Open Graph, and Twitter metadata.
+  `/robots.txt` and `/sitemap.xml` use Next.js metadata routes; no crawler-only
+  routing layer is required.
+- Frontend routes: `/`; `/subjects`, `/subjects/[slug]`, and
+  `/subjects/[slug]/topics/[topicSlug]`; `/notes/[resourceId]` and its slug
+  variant; `/question-papers/[resourceId]` and its slug variant; `/pyqs`,
+  `/search`, `/resources/[resourceType]/[resourceId]`, `/advertising`, `/terms`,
+  `/library`, `/practice`, `/uploads`, `/upload`, `/notifications`, `/syllabus`,
+  `/dashboard` (redirects to `/search`), `/profile/[username]`, `/admin`,
+  `/admin/dashboard`, `/login`, `/admin/login`, `/register`,
+  `/forgot-password`, `/reset-password`, `/verify-email`, and
+  `/resend-verification`. API handlers remain under `/api/*`.
 - Set `FRONTEND_URL` to the public frontend origin (scheme and host, without a
   path) in the backend environment. It is used for canonical links and sitemap
   entries. The sitemap includes the home, question-paper, legal, sufficiently
   populated subject/topic, and published resource pages. Sitemap entries are
   queried from MongoDB when connected and refresh on request; the public
   resource endpoints cache briefly.
-- Production hosting must route `/robots.txt`, `/sitemap.xml`, `/notes/*`,
-  `/question-papers/*`, `/subjects`, and `/subjects/*` from the frontend
-  hostname to the Express service before applying the SPA fallback. Preserve
-  the backend's HTTP status and `Location` headers so unknown resources return
-  404 and outdated resource slugs return 301. Keep `/api/*` routed to the API
-  as configured by `VITE_API_BASE_URL`. Without these host rewrites, static
-  Vite hosting will return the SPA shell instead of dynamic sitemap or
-  server-rendered resource HTML.
+- Deploy the Next.js application as a Node.js server so its API route handlers
+  can use MongoDB and the existing backend services. `NEXT_PUBLIC_API_BASE_URL`
+  defaults to `/api` and should only be changed when intentionally using a
+  separate API origin.
 - Public resource pages read only published records with an explicit
   `visibility: "public"` value. Private, unpublished, unlisted, or legacy
   records without explicit public visibility are excluded. Pages expose
@@ -335,13 +344,14 @@ database readiness. Use `npm run build` to build the frontend.
   `npm run test --workspace=backend -- src/services/note-ocr.service.test.js src/services/syllabus-analysis.service.test.js src/services/note-verification.service.test.js src/services/ai-practice.service.test.js src/services/learning-tutor.service.test.js`.
   These tests use mocked Gemini responses; they do not prove that a live Google
   API key, project quota, or production network path is valid.
-- For a live smoke test, configure a backend-only `GEMINI_API_KEY`, supported
+- For a live smoke test, configure a server-only `GEMINI_API_KEY`, supported
   model IDs, MongoDB, and `OCR_ENCRYPTION_KEY`, then exercise a small image/PDF
   note upload, syllabus upload, note verification, and `/practice` with an
   authenticated test account. Do not upload student documents to test accounts
   without consent.
-- In deployment, set the Gemini variables only on the backend service, keep
-  `GEMINI_API_KEY` out of Vite/frontend environment variables, configure the
+- In deployment, set the Gemini variables only in the Next.js server
+  environment, keep
+  `GEMINI_API_KEY` out of `NEXT_PUBLIC_*` client variables, configure the
   production MongoDB connection and existing Cloudinary credentials, and
   preserve the existing `OCR_ENCRYPTION_KEY`. Review Google AI Studio quotas
   and usage before making the API public; the Free Tier has finite per-project
@@ -441,16 +451,15 @@ database readiness. Use `npm run build` to build the frontend.
 
 ```text
 frontend/
+  app/                Next.js App Router pages, API handlers, and shared layout
   src/
     components/       Reusable UI, auth forms, rewards, and dashboard components
     context/          Cookie-backed authentication state
     lib/              Centralized API client
     pages/            Login, registration, recovery, dashboard, PYQ, search, library, and syllabus screens
-    App.jsx           Landing page and client-side routes
     index.css         Tailwind directives and global styles
-    main.jsx          React entry point
-  index.html          Vite HTML entry
-  vite.config.js      Vite and React plugin configuration
+  server/             Server-only API and SEO metadata helpers
+  next.config.mjs     Next.js runtime and worker asset configuration
   tailwind.config.js  Tailwind content paths and theme
   postcss.config.js   Tailwind/Autoprefixer processing
   .env.example        Frontend environment variable example
@@ -463,7 +472,8 @@ backend/
     routes/           Auth, dashboard, note, syllabus, rewards, and health API routes
     scripts/          Admin provisioning command
     services/         Email, auth, secure storage, OCR, AI verification, and academic review services
-    app.js            Express middleware and route setup
-    server.js         Database connection and HTTP startup
+    app.js            Web Request dispatcher for API and SEO routes
   .env.example        Backend environment variable example
 ```
+#   T o p p e r _ n e x t  
+ 
