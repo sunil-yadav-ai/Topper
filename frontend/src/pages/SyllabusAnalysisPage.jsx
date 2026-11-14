@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { Copy, RefreshCw } from "lucide-react";
 import Panel from "../components/Panel.jsx";
 import { api } from "../lib/api.js";
@@ -62,7 +64,7 @@ function ResourceCard({ resource }) {
         </div>
         <Link
           className="shrink-0 rounded-lg bg-brand px-3 py-2 text-sm font-bold text-white hover:bg-indigo-700"
-          to={`/resources/${resource.type}/${resource.id}`}
+          href={`/resources/${resource.type}/${resource.id}`}
         >
           View Resource
         </Link>

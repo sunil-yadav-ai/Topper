@@ -1,16 +1,21 @@
-import { Router } from "express";
+import { Router } from "../lib/router.js";
 import {
   confirmSyllabusAndFindResources,
   getSyllabusAnalysis,
   listSyllabusAnalyses,
   regenerateSyllabusStructure,
-  receiveSyllabusFile,
   updateSyllabusStructure,
   uploadSyllabus,
 } from "../controllers/syllabus-analysis.controller.js";
 import { requireAuth, requireRole } from "../middleware/auth.middleware.js";
+import { receiveMultipart } from "../middleware/next-upload.js";
 
 const syllabusAnalysisRouter = Router();
+const receiveSyllabusFile = receiveMultipart({
+  fields: ["file"],
+  maxFileSize: 10 * 1024 * 1024,
+  single: true,
+});
 
 syllabusAnalysisRouter.use(requireAuth, requireRole("user"));
 syllabusAnalysisRouter.get("/", listSyllabusAnalyses);

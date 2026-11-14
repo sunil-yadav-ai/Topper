@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { useGSAP } from "@gsap/react";
 import AdUnit from "./AdUnit.jsx";
 import { AuthenticatedSiteHeader } from "./SiteChrome.jsx";
@@ -71,9 +73,9 @@ function Arrow({ diagonal = false }) {
   return <span aria-hidden="true" className="ed-arrow">{diagonal ? "↗" : "→"}</span>;
 }
 
-function ButtonLink({ children, to, kind = "dark", className = "" }) {
+function ButtonLink({ children, href, kind = "dark", className = "" }) {
   return (
-    <Link className={`ed-button ed-button-${kind} ${className}`} to={to}>
+    <Link className={`ed-button ed-button-${kind} ${className}`} href={href}>
       {children}
       <Arrow />
     </Link>
@@ -268,7 +270,7 @@ function SubjectVault() {
               : `/search?subject=${encodeURIComponent(subject.name)}`;
             return (
               <Reveal className={`ed-subject-reveal ed-subject-${subject.color}`} delay={index * 70} key={subject.name}>
-                <Link className={`ed-subject-card ed-card-${subject.color}`} to={href}>
+                <Link className={`ed-subject-card ed-card-${subject.color}`} href={href}>
                   <div className="ed-subject-card-top">
                     <span className="ed-subject-number">0{index + 1} / 06</span>
                     <span className="ed-subject-symbol">{subject.short}</span>
@@ -482,7 +484,7 @@ function HallOfFame() {
                     <span><b>Notes</b><small>shared with care</small></span>
                     <span><b>Helpful</b><small>to the community</small></span>
                   </div>
-                  <Link className="ed-hall-link" to="/register">Be part of the story <Arrow /></Link>
+                  <Link className="ed-hall-link" href="/register">Be part of the story <Arrow /></Link>
                 </div>
               </article>
             </Reveal>
@@ -506,8 +508,11 @@ function CtaMascot() {
 }
 
 function EduRiseFooter({ apiStatus }) {
-  const shareUrl = encodeURIComponent(window.location.origin);
-  const contactEmail = (import.meta.env.VITE_CONTACT_EMAIL ?? "").trim();
+  const [shareUrl, setShareUrl] = useState("");
+  useEffect(() => {
+    setShareUrl(encodeURIComponent(window.location.origin));
+  }, []);
+  const contactEmail = (process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "").trim();
   const validContactEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)
     ? contactEmail
     : "";
@@ -520,15 +525,15 @@ function EduRiseFooter({ apiStatus }) {
       <div className="ed-footer-inner">
         <div className="ed-footer-main">
           <div className="ed-footer-brand">
-            <Link aria-label="Topper home" to="/"><TopperLogo inverse /></Link>
+            <Link aria-label="Topper home" href="/"><TopperLogo inverse /></Link>
             <p>Learn Together.<br /><span>Rise Together.</span></p>
             <span className="ed-footer-free">FREE TO LEARN · FREE TO SHARE</span>
           </div>
           <div className="ed-footer-links">
-            <div><h2>Explore</h2><Link to="/search">Knowledge vault</Link><Link to="/subjects">Study subjects</Link><Link to="/pyqs">Previous-year papers</Link><Link to="/syllabus">Syllabus explorer</Link></div>
-            <div><h2>Join in</h2><Link to="/register">Share your notes</Link><Link to="/login">Student sign in</Link><Link to="/library">Your library</Link></div>
-            <div><h2>About</h2><a href="#about">Our story</a><a href="#verification">Thoughtful verification</a><Link to="/terms">Terms &amp; conditions</Link></div>
-            <div><h2>Privacy</h2><Link to="/advertising">Privacy &amp; advertising details</Link>{validContactEmail ? <a href={`mailto:${validContactEmail}`}>Contact Topper</a> : <span className="ed-footer-coming-soon">Contact details coming soon</span>}</div>
+            <div><h2>Explore</h2><Link href="/search">Knowledge vault</Link><Link href="/subjects">Study subjects</Link><Link href="/pyqs">Previous-year papers</Link><Link href="/syllabus">Syllabus explorer</Link></div>
+            <div><h2>Join in</h2><Link href="/register">Share your notes</Link><Link href="/login">Student sign in</Link><Link href="/library">Your library</Link></div>
+            <div><h2>About</h2><a href="#about">Our story</a><a href="#verification">Thoughtful verification</a><Link href="/terms">Terms &amp; conditions</Link></div>
+            <div><h2>Privacy</h2><Link href="/advertising">Privacy &amp; advertising details</Link>{validContactEmail ? <a href={`mailto:${validContactEmail}`}>Contact Topper</a> : <span className="ed-footer-coming-soon">Contact details coming soon</span>}</div>
           </div>
           <div className="ed-footer-social">
             <span>PASS THE GOOD STUFF ON.</span>
@@ -554,9 +559,7 @@ export default function EduRiseLanding() {
   const { user } = useAuth();
   const [apiStatus, setApiStatus] = useState("Connecting to the library…");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(
-    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-  );
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const accountPath = user ? getPostLoginPath(user) : "/register";
 
   useEffect(() => {
@@ -935,7 +938,7 @@ export default function EduRiseLanding() {
       </svg>
       {user ? <AuthenticatedSiteHeader user={user} /> : <header className="ed-header">
         <div className="ed-header-inner">
-          <Link aria-label="Topper home" className="ed-logo-link" to="/"><TopperLogo /></Link>
+          <Link aria-label="Topper home" className="ed-logo-link" href="/"><TopperLogo /></Link>
           <button
             aria-expanded={menuOpen}
             aria-label={menuOpen ? "Close navigation" : "Open navigation"}
@@ -947,17 +950,17 @@ export default function EduRiseLanding() {
           </button>
           <nav aria-label="Main navigation" className={`ed-nav ${menuOpen ? "ed-nav-open" : ""}`}>
             <a href="#explore" onClick={() => setMenuOpen(false)}>Explore</a>
-            <Link to="/subjects" onClick={() => setMenuOpen(false)}>Subjects</Link>
-            <Link to="/pyqs" onClick={() => setMenuOpen(false)}>Question papers</Link>
+            <Link href="/subjects" onClick={() => setMenuOpen(false)}>Subjects</Link>
+            <Link href="/pyqs" onClick={() => setMenuOpen(false)}>Question papers</Link>
             <a href="#verification" onClick={() => setMenuOpen(false)}>How we check</a>
             <a href="#contributors" onClick={() => setMenuOpen(false)}>Our people</a>
             {user?.username && (
-              <Link to={`/profile/${encodeURIComponent(user.username)}`} onClick={() => setMenuOpen(false)}>
+              <Link href={`/profile/${encodeURIComponent(user.username)}`} onClick={() => setMenuOpen(false)}>
                 My profile
               </Link>
             )}
             {user && <NotificationBell />}
-            <Link className="ed-nav-cta" to={accountPath} onClick={() => setMenuOpen(false)}>
+            <Link className="ed-nav-cta" href={accountPath} onClick={() => setMenuOpen(false)}>
               {user?.role === "admin" ? "Admin Dashboard" : user ? "My profile" : "Join for free"} <Arrow />
             </Link>
           </nav>
@@ -979,8 +982,8 @@ export default function EduRiseLanding() {
             </h1>
             <p>Your notes can help someone learn. Discover, share and grow with <b>Topper.</b></p>
             <div className="ed-hero-actions">
-              <ButtonLink className="ed-hero-primary" to="/search" kind="dark">Explore resources</ButtonLink>
-              <ButtonLink className="ed-hero-secondary" to={user ? "/uploads" : "/register"} kind="paper">Share your notes</ButtonLink>
+              <ButtonLink className="ed-hero-primary" href="/search" kind="dark">Explore resources</ButtonLink>
+              <ButtonLink className="ed-hero-secondary" href={user ? "/uploads" : "/register"} kind="paper">Share your notes</ButtonLink>
             </div>
             <div className="ed-hero-proof">
               <span><i>✓</i> Always free to learn</span>
@@ -1032,10 +1035,10 @@ export default function EduRiseLanding() {
             </h2>
             <p>One upload can make somebody else’s hard chapter click.</p>
             <div className="ed-hero-actions">
-              <ButtonLink className="ed-cta-dark" to={accountPath} kind="dark">
+              <ButtonLink className="ed-cta-dark" href={accountPath} kind="dark">
                 {user?.role === "admin" ? "Admin dashboard" : user ? "My profile" : "Join Topper"}
               </ButtonLink>
-              <ButtonLink className="ed-cta-paper" to="/search" kind="paper">Explore resources</ButtonLink>
+              <ButtonLink className="ed-cta-paper" href="/search" kind="paper">Explore resources</ButtonLink>
             </div>
           </Reveal>
           <Reveal className="ed-final-cta-art" delay={130}>

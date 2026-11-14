@@ -1,10 +1,10 @@
-import { Router } from "express";
+import { Router } from "../lib/router.js";
+import { receiveMultipart } from "../middleware/next-upload.js";
 import {
   bookmarkPyq,
   browsePyqs,
   getMyUploadedPyqs,
   getMyBookmarks,
-  receivePyqPdf,
   removePyqBookmark,
   reportPyq,
   uploadPyq,
@@ -16,6 +16,12 @@ import {
 } from "../middleware/auth.middleware.js";
 
 const pyqRouter = Router();
+const receivePyqPdf = receiveMultipart({
+  fields: ["file"],
+  maxFileSize: 20 * 1024 * 1024,
+  single: true,
+  uploadKind: "pyq",
+});
 
 pyqRouter.get(
   "/mine",

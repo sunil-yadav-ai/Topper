@@ -24,6 +24,6 @@ const noteOcrJobSchema = new mongoose.Schema(
 
 noteOcrJobSchema.index({ status: 1, createdAt: 1 });
 
-const NoteOcrJob = mongoose.model("NoteOcrJob", noteOcrJobSchema);
+const NoteOcrJob = mongoose.models.NoteOcrJob || mongoose.model("NoteOcrJob", noteOcrJobSchema);
 
 export default NoteOcrJob;

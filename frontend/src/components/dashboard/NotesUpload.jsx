@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import FormField from "../FormField.jsx";
 import { api } from "../../lib/api.js";
 import { notifyResourceOptionsUpdated } from "../../lib/resource-options.js";
@@ -500,7 +500,7 @@ export default function NotesUpload({ profile }) {
                     )}
                     <Link
                       className="mt-2 inline-block text-sm font-semibold text-brand hover:underline"
-                      to={`/resources/note/${note.id}`}
+                      href={`/resources/note/${note.id}`}
                     >
                       View Resource
                     </Link>

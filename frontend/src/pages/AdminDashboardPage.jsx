@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import CommunityReports from "../components/dashboard/CommunityReports.jsx";
 import AdminRewardsPanel from "../components/AdminRewardsPanel.jsx";
 import Panel from "../components/Panel.jsx";
@@ -312,7 +314,7 @@ function NoteReviewCard({ note }) {
         </div>
         <Link
           className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-brand hover:bg-indigo-50"
-          to={`/resources/note/${note.id}`}
+          href={`/resources/note/${note.id}`}
         >
           View resource
         </Link>
@@ -592,7 +594,7 @@ function AdminPyqReports() {
               </div>
               <p className="mt-3 text-sm font-semibold capitalize text-slate-700">{report.reason}</p>
               {report.details && <p className="mt-1 whitespace-pre-wrap text-sm text-slate-600">{report.details}</p>}
-              {report.pyq?.id && <Link className="mt-2 inline-block text-sm font-semibold text-brand underline" to={`/resources/pyq/${report.pyq.id}`}>View question paper</Link>}
+              {report.pyq?.id && <Link className="mt-2 inline-block text-sm font-semibold text-brand underline" href={`/resources/pyq/${report.pyq.id}`}>View question paper</Link>}
               {report.status === "open" && (
                 <>
                   <textarea

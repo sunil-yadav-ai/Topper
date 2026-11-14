@@ -1,5 +1,8 @@
+"use client";
+
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import AuthLayout from "../components/AuthLayout.jsx";
 import FormField from "../components/FormField.jsx";
 import SubmitButton from "../components/SubmitButton.jsx";
@@ -55,13 +58,13 @@ function useFormRequest() {
 
 export function LoginPage({ admin = false }) {
   const { signIn } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
   const request = useFormRequest();
   async function handleSubmit(event) {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
     const user = await request.submit(() => signIn(values, admin));
-    if (user) navigate(getPostLoginPath(user), { replace: true });
+    if (user) router.replace(getPostLoginPath(user));
   }
 
   const title = admin ? "Admin sign in" : "Welcome back";
@@ -95,7 +98,7 @@ export function LoginPage({ admin = false }) {
         />
         {!admin && (
           <div className="text-right">
-            <Link className="text-sm font-semibold text-brand hover:underline" to="/forgot-password">
+            <Link className="text-sm font-semibold text-brand hover:underline" href="/forgot-password">
               Forgot password?
             </Link>
           </div>
@@ -105,14 +108,14 @@ export function LoginPage({ admin = false }) {
       {!admin && (
         <p className="mt-5 text-center text-sm text-slate-600">
           New to Topper?{" "}
-          <Link className="font-semibold text-brand hover:underline" to="/register">
+          <Link className="font-semibold text-brand hover:underline" href="/register">
             Create an account
           </Link>
         </p>
       )}
       {admin && (
         <p className="mt-4 text-center text-sm text-slate-500">
-          <Link className="hover:text-brand" to="/login">Student sign in</Link>
+          <Link className="hover:text-brand" href="/login">Student sign in</Link>
         </p>
       )}
     </AuthLayout>
@@ -156,7 +159,7 @@ export function RegisterPage() {
       </form>
       <p className="mt-5 text-center text-sm text-slate-600">
         Already have an account?{" "}
-        <Link className="font-semibold text-brand hover:underline" to="/login">Sign in</Link>
+        <Link className="font-semibold text-brand hover:underline" href="/login">Sign in</Link>
       </p>
     </AuthLayout>
   );
@@ -190,14 +193,13 @@ export function ForgotPasswordPage() {
         <SubmitButton loading={request.loading}>Send reset link</SubmitButton>
       </form>
       <p className="mt-5 text-center text-sm">
-        <Link className="font-semibold text-brand hover:underline" to="/login">Back to sign in</Link>
+        <Link className="font-semibold text-brand hover:underline" href="/login">Back to sign in</Link>
       </p>
     </AuthLayout>
   );
 }
 
-export function ResetPasswordPage() {
-  const [searchParams] = useSearchParams();
+export function ResetPasswordPage({ token = "" }) {
   const request = useFormRequest();
 
   async function handleSubmit(event) {
@@ -211,7 +213,7 @@ export function ResetPasswordPage() {
     }
     await request.submit(async () => {
       const { data } = await api.post("/auth/reset-password", {
-        token: searchParams.get("token"),
+        token,
         password: values.password,
       });
       return data;
@@ -232,19 +234,16 @@ export function ResetPasswordPage() {
       </form>
       {request.success && (
         <p className="mt-5 text-center text-sm">
-          <Link className="font-semibold text-brand hover:underline" to="/login">Continue to sign in</Link>
+          <Link className="font-semibold text-brand hover:underline" href="/login">Continue to sign in</Link>
         </p>
       )}
     </AuthLayout>
   );
 }
 
-export function VerifyEmailPage() {
-  const [searchParams] = useSearchParams();
+export function VerifyEmailPage({ token = "" }) {
   const request = useFormRequest();
   const verificationStarted = useRef(false);
-  const token = searchParams.get("token");
-
   const handleVerify = useCallback(async () => {
     await request.submit(async () => {
       const { data } = await api.post("/auth/verify-email", { token });
@@ -277,7 +276,7 @@ export function VerifyEmailPage() {
               Verify email
             </SubmitButton>
             <p className="text-center text-sm">
-              <Link className="font-semibold text-brand hover:underline" to="/resend-verification">
+              <Link className="font-semibold text-brand hover:underline" href="/resend-verification">
                 Request a new verification link
               </Link>
             </p>
@@ -286,7 +285,7 @@ export function VerifyEmailPage() {
         {request.success && (
           <Link
             className="inline-flex w-full justify-center rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700"
-            to="/login"
+            href="/login"
           >
             Continue to sign in
           </Link>

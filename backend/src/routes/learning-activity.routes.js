@@ -1,5 +1,5 @@
-import { Router } from "express";
-import rateLimit from "express-rate-limit";
+import { Router } from "../lib/router.js";
+import rateLimit from "../middleware/rate-limit.js";
 import {
   getLearningActivity,
   recordLearningActivity,

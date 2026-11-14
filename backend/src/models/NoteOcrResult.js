@@ -23,6 +23,7 @@ const noteOcrResultSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-const NoteOcrResult = mongoose.model("NoteOcrResult", noteOcrResultSchema);
+const NoteOcrResult =
+  mongoose.models.NoteOcrResult || mongoose.model("NoteOcrResult", noteOcrResultSchema);
 
 export default NoteOcrResult;

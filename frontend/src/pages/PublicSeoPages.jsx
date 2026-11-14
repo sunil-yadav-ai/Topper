@@ -1,21 +1,23 @@
+"use client";
+
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import Link from "next/link";
 import { api } from "../lib/api.js";
-import SeoHead, { breadcrumbSchema, organizationSchema } from "../components/SeoHead.jsx";
+import { JsonLd, breadcrumbSchema, organizationSchema } from "../lib/seo-schema.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
 function PublicPageShell({ breadcrumbs = [], children }) {
   return (
     <main className="min-h-screen bg-[#fff8eb] px-4 py-6 text-[#171717] sm:px-8 sm:py-10">
       <header className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 border-b border-black/15 pb-5">
-        <Link aria-label="Topper home" className="text-2xl font-black tracking-tight text-[#171717]" to="/">
+        <Link aria-label="Topper home" className="text-2xl font-black tracking-tight text-[#171717]" href="/">
           Top<span className="text-[#ff641f]">per</span>
         </Link>
         <nav aria-label="Main navigation" className="flex flex-wrap gap-4 text-sm font-semibold">
-          <Link className="hover:underline" to="/">Home</Link>
-          <Link className="hover:underline" to="/subjects">Subjects</Link>
-          <Link className="hover:underline" to="/pyqs">Question papers</Link>
-          <Link className="hover:underline" to="/search">Explore</Link>
+          <Link className="hover:underline" href="/">Home</Link>
+          <Link className="hover:underline" href="/subjects">Subjects</Link>
+          <Link className="hover:underline" href="/pyqs">Question papers</Link>
+          <Link className="hover:underline" href="/search">Explore</Link>
         </nav>
       </header>
       <div className="mx-auto max-w-5xl py-6 sm:py-9">
@@ -25,7 +27,7 @@ function PublicPageShell({ breadcrumbs = [], children }) {
               {breadcrumbs.map((item, index) => (
                 <li className="flex items-center gap-2" key={`${item.name}-${index}`}>
                   {index > 0 && <span aria-hidden="true">/</span>}
-                  {item.path ? <Link className="hover:underline" to={item.path}>{item.name}</Link> : <span aria-current="page">{item.name}</span>}
+                  {item.path ? <Link className="hover:underline" href={item.path}>{item.name}</Link> : <span aria-current="page">{item.name}</span>}
                 </li>
               ))}
             </ol>
@@ -34,11 +36,11 @@ function PublicPageShell({ breadcrumbs = [], children }) {
         {children}
       </div>
       <footer className="mx-auto max-w-5xl border-t border-black/15 py-5 text-sm text-slate-600">
-        <Link className="font-semibold hover:underline" to="/">Topper home</Link>
+        <Link className="font-semibold hover:underline" href="/">Topper home</Link>
         {" · "}
-        <Link className="font-semibold hover:underline" to="/terms">Terms and community guidelines</Link>
+        <Link className="font-semibold hover:underline" href="/terms">Terms and community guidelines</Link>
         {" · "}
-        <Link className="font-semibold hover:underline" to="/advertising">Advertising and privacy</Link>
+        <Link className="font-semibold hover:underline" href="/advertising">Advertising and privacy</Link>
       </footer>
     </main>
   );
@@ -51,7 +53,7 @@ function LoadingOrError({ loading, error }) {
         <>
           <h1 className="text-2xl font-black">This page is unavailable</h1>
           <p className="mt-2 text-slate-600">{error}</p>
-          <Link className="mt-4 inline-block font-bold text-indigo-700 hover:underline" to="/subjects">Browse available subjects</Link>
+          <Link className="mt-4 inline-block font-bold text-indigo-700 hover:underline" href="/subjects">Browse available subjects</Link>
         </>
       )}
     </section>
@@ -66,15 +68,15 @@ function resourceTitle(resource) {
   return resource.seoTitle;
 }
 
-function resourceSchema(resource) {
-  const resourceUrl = new URL(resource.path, window.location.origin).href;
+function resourceSchema(resource, siteOrigin) {
+  const resourceUrl = new URL(resource.path, siteOrigin).href;
   return [
-    ...organizationSchema().slice(0, 1),
+    ...organizationSchema(siteOrigin).slice(0, 1),
     breadcrumbSchema([
       { name: "Home", path: "/" },
       ...(resource.subjectPath ? [{ name: resource.subject, path: resource.subjectPath }] : [{ name: resource.subject, path: "" }]),
       { name: resource.title, path: resource.path },
-    ]),
+    ], siteOrigin),
     {
       "@context": "https://schema.org",
       "@type": "LearningResource",
@@ -86,20 +88,24 @@ function resourceSchema(resource) {
       about: resource.topic
         ? [{ "@type": "Thing", name: resource.subject }, { "@type": "Thing", name: resource.topic }]
         : { "@type": "Thing", name: resource.subject },
-      provider: { "@id": `${window.location.origin}/#organization` },
+      provider: { "@id": `${siteOrigin}/#organization` },
       ...(resource.keywords.length ? { keywords: resource.keywords.join(", ") } : {}),
     },
   ];
 }
 
-export function PublicResourcePage({ type }) {
-  const { resourceId } = useParams();
+export function PublicResourcePage({ type, resourceId, siteOrigin, initialData }) {
   const { user } = useAuth();
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(initialData);
+  const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (initialData) {
+      setData(initialData);
+      setLoading(false);
+      return undefined;
+    }
     const controller = new AbortController();
     setData(null);
     setError("");
@@ -113,7 +119,7 @@ export function PublicResourcePage({ type }) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [resourceId, type]);
+  }, [initialData, resourceId, type]);
 
   const resource = data?.resource;
   const title = resource ? resourceTitle(resource) : "Published resource | Topper";
@@ -140,16 +146,7 @@ export function PublicResourcePage({ type }) {
 
   return (
     <>
-      <SeoHead
-        canonicalPath={resource ? resource.path : error ? false : undefined}
-        description={description}
-        keywords={resource?.keywords ?? []}
-        pathname={window.location.pathname}
-        robots={resource ? "index,follow" : "noindex,follow"}
-        structuredData={resource ? resourceSchema(resource) : undefined}
-        title={resource ? title : error ? "Resource not found | Topper" : title}
-        type="website"
-      />
+      <JsonLd data={resource ? resourceSchema(resource, siteOrigin) : undefined} />
       <PublicPageShell breadcrumbs={crumbs}>
         {!resource ? <LoadingOrError error={error} loading={loading} /> : (
           <article>
@@ -170,16 +167,16 @@ export function PublicResourcePage({ type }) {
               </dl>
             </section>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link className="rounded-xl bg-indigo-700 px-5 py-3 text-center font-bold text-white hover:bg-indigo-800" to={user ? targetPath : "/login"}>
+              <Link className="rounded-xl bg-indigo-700 px-5 py-3 text-center font-bold text-white hover:bg-indigo-800" href={user ? targetPath : "/login"}>
                 {user ? "Open resource" : "Sign in to view the complete resource"}
               </Link>
               {resource.topicPath && (
-                <Link className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-center font-bold text-slate-800 hover:bg-slate-50" to={resource.topicPath}>
+                <Link className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-center font-bold text-slate-800 hover:bg-slate-50" href={resource.topicPath}>
                   More on {resource.topic}
                 </Link>
               )}
               {resource.subjectPath && (
-                <Link className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-center font-bold text-slate-800 hover:bg-slate-50" to={resource.subjectPath}>
+                <Link className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-center font-bold text-slate-800 hover:bg-slate-50" href={resource.subjectPath}>
                   More {resource.subject} resources
                 </Link>
               )}
@@ -190,7 +187,7 @@ export function PublicResourcePage({ type }) {
                 <ul className="mt-4 grid gap-3 sm:grid-cols-2">
                   {data.relatedResources.map((related) => (
                     <li className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" key={`${related.type}-${related.id}`}>
-                      <Link className="font-bold text-indigo-800 hover:underline" to={related.path}>{related.title}</Link>
+                      <Link className="font-bold text-indigo-800 hover:underline" href={related.path}>{related.title}</Link>
                       <p className="mt-1 text-sm text-slate-600">{[related.type === "note" ? "Study notes" : "Question paper", related.subject, related.university, related.examinationYear].filter(Boolean).join(" · ")}</p>
                     </li>
                   ))}
@@ -204,15 +201,15 @@ export function PublicResourcePage({ type }) {
   );
 }
 
-function collectionSchema(name, description, path, resources) {
+function collectionSchema(name, description, path, resources, siteOrigin) {
   return [
-    ...organizationSchema().slice(0, 1),
+    ...organizationSchema(siteOrigin).slice(0, 1),
     {
       "@context": "https://schema.org",
       "@type": "CollectionPage",
       name,
       description,
-      url: new URL(path, window.location.origin).href,
+      url: new URL(path, siteOrigin).href,
       mainEntity: {
         "@type": "ItemList",
         numberOfItems: resources.length,
@@ -220,18 +217,23 @@ function collectionSchema(name, description, path, resources) {
           "@type": "ListItem",
           position: index + 1,
           name: resource.title,
-          url: new URL(resource.path, window.location.origin).href,
+          url: new URL(resource.path, siteOrigin).href,
         })),
       },
     },
   ];
 }
 
-function usePublicData(path, key) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+function usePublicData(path, key, initialResponse) {
+  const [data, setData] = useState(initialResponse?.[key] ?? null);
+  const [loading, setLoading] = useState(!initialResponse);
   const [error, setError] = useState("");
   useEffect(() => {
+    if (initialResponse) {
+      setData(initialResponse[key] ?? null);
+      setLoading(false);
+      return undefined;
+    }
     const controller = new AbortController();
     setData(null);
     setError("");
@@ -245,7 +247,7 @@ function usePublicData(path, key) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [key, path]);
+  }, [initialResponse, key, path]);
   return { data, error, loading };
 }
 
@@ -254,7 +256,7 @@ function SubjectResourceList({ resources }) {
     <ul className="mt-4 grid gap-3 sm:grid-cols-2">
       {resources.map((resource) => (
         <li className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" key={`${resource.type}-${resource.id}`}>
-          <Link className="font-bold text-indigo-800 hover:underline" to={resource.path}>{resource.title}</Link>
+          <Link className="font-bold text-indigo-800 hover:underline" href={resource.path}>{resource.title}</Link>
           <p className="mt-1 text-sm text-slate-600">{[resource.type === "note" ? "Study notes" : "Question paper", resource.subject, resource.university, resource.examinationYear].filter(Boolean).join(" · ")}</p>
         </li>
       ))}
@@ -262,20 +264,20 @@ function SubjectResourceList({ resources }) {
   );
 }
 
-export function SubjectDirectoryPage() {
-  const { data: subjects, error, loading } = usePublicData("/seo/subjects", "subjects");
+export function SubjectDirectoryPage({ siteOrigin, initialData }) {
+  const { data: subjects, error, loading } = usePublicData("/seo/subjects", "subjects", initialData);
   const description = subjects
     ? `Browse ${subjects.length} subjects with published student notes and previous-year question papers on Topper.`
     : "Browse subject areas with published student notes and previous-year question papers on Topper.";
   const schema = subjects?.length
     ? [
-        ...organizationSchema().slice(0, 1),
+        ...organizationSchema(siteOrigin).slice(0, 1),
         {
           "@context": "https://schema.org",
           "@type": "CollectionPage",
           name: "Study Subjects, Notes and Question Papers | Topper",
           description,
-          url: new URL("/subjects", window.location.origin).href,
+          url: new URL("/subjects", siteOrigin).href,
           mainEntity: {
             "@type": "ItemList",
             numberOfItems: subjects.length,
@@ -283,7 +285,7 @@ export function SubjectDirectoryPage() {
               "@type": "ListItem",
               position: index + 1,
               name: subject.subject,
-              url: new URL(`/subjects/${subject.slug}`, window.location.origin).href,
+              url: new URL(`/subjects/${subject.slug}`, siteOrigin).href,
             })),
           },
         },
@@ -292,14 +294,7 @@ export function SubjectDirectoryPage() {
 
   return (
     <>
-      <SeoHead
-        canonicalPath={error ? false : "/subjects"}
-        description={description}
-        pathname={window.location.pathname}
-        robots={subjects?.length ? "index,follow" : "noindex,follow"}
-        structuredData={schema}
-        title="Study Subjects, Notes and Question Papers | Topper"
-      />
+      <JsonLd data={schema} />
       <PublicPageShell breadcrumbs={[{ name: "Home", path: "/" }, { name: "Subjects" }]}>
         <h1 className="text-3xl font-black sm:text-5xl">Browse study subjects</h1>
         <p className="mt-3 max-w-3xl leading-7 text-slate-700">Explore subject areas with published resources shared on Topper.</p>
@@ -309,7 +304,7 @@ export function SubjectDirectoryPage() {
           <ul className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {subjects.map((subject) => (
               <li className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" key={subject.slug}>
-                <Link className="font-bold text-indigo-800 hover:underline" to={`/subjects/${subject.slug}`}>{subject.subject}</Link>
+                <Link className="font-bold text-indigo-800 hover:underline" href={`/subjects/${subject.slug}`}>{subject.subject}</Link>
                 <p className="mt-1 text-sm text-slate-600">{subject.resourceCount} published resources</p>
               </li>
             ))}
@@ -320,9 +315,8 @@ export function SubjectDirectoryPage() {
   );
 }
 
-export function SubjectPage() {
-  const { slug } = useParams();
-  const { data: subject, error, loading } = usePublicData(`/seo/subjects/${slug}`, "subject");
+export function SubjectPage({ slug, siteOrigin, initialData }) {
+  const { data: subject, error, loading } = usePublicData(`/seo/subjects/${slug}`, "subject", initialData);
   const title = subject
     ? `${subject.subject} Notes, Topics and Question Papers | Topper`
     : "Study subject | Topper";
@@ -331,13 +325,13 @@ export function SubjectPage() {
     : "Browse published notes and question papers by subject on Topper.";
   const schema = subject
     ? [
-        ...organizationSchema().slice(0, 1),
+        ...organizationSchema(siteOrigin).slice(0, 1),
         breadcrumbSchema([
           { name: "Home", path: "/" },
           { name: "Subjects", path: "/subjects" },
           { name: subject.subject, path: `/subjects/${subject.slug}` },
-        ]),
-        ...collectionSchema(title, description, `/subjects/${subject.slug}`, subject.resources).slice(1),
+        ], siteOrigin),
+        ...collectionSchema(title, description, `/subjects/${subject.slug}`, subject.resources, siteOrigin).slice(1),
       ]
     : undefined;
   const crumbs = subject
@@ -346,14 +340,7 @@ export function SubjectPage() {
 
   return (
     <>
-      <SeoHead
-        canonicalPath={subject ? `/subjects/${subject.slug}` : error ? false : undefined}
-        description={description}
-        pathname={window.location.pathname}
-        robots={subject ? "index,follow" : "noindex,follow"}
-        structuredData={schema}
-        title={title}
-      />
+      <JsonLd data={schema} />
       <PublicPageShell breadcrumbs={crumbs}>
         {!subject ? <LoadingOrError error={error} loading={loading} /> : (
           <>
@@ -367,7 +354,7 @@ export function SubjectPage() {
                 <ul className="mt-3 flex flex-wrap gap-3">
                   {subject.topics.map((topic) => (
                     <li key={topic.slug}>
-                      <Link className="inline-flex rounded-full border border-indigo-200 bg-white px-4 py-2 font-semibold text-indigo-800 hover:bg-indigo-50" to={`/subjects/${subject.slug}/topics/${topic.slug}`}>
+                      <Link className="inline-flex rounded-full border border-indigo-200 bg-white px-4 py-2 font-semibold text-indigo-800 hover:bg-indigo-50" href={`/subjects/${subject.slug}/topics/${topic.slug}`}>
                         {topic.topic} <span className="ml-2 text-sm text-slate-500">({topic.resourceCount})</span>
                       </Link>
                     </li>
@@ -386,10 +373,9 @@ export function SubjectPage() {
   );
 }
 
-export function TopicPage() {
-  const { slug, topicSlug } = useParams();
+export function TopicPage({ slug, topicSlug, siteOrigin, initialData }) {
   const path = `/seo/subjects/${slug}/topics/${topicSlug}`;
-  const { data, error, loading } = usePublicData(path, "topic");
+  const { data, error, loading } = usePublicData(path, "topic", initialData);
   const topic = data?.topic;
   const title = topic
     ? `${topic.topic} Notes | ${topic.subject.subject} | Topper`
@@ -402,13 +388,13 @@ export function TopicPage() {
     : undefined;
   const schema = topic
     ? [
-        ...organizationSchema().slice(0, 1),
+        ...organizationSchema(siteOrigin).slice(0, 1),
         breadcrumbSchema([
           { name: "Home", path: "/" },
           { name: topic.subject.subject, path: `/subjects/${topic.subject.slug}` },
           { name: topic.topic, path: canonicalPath },
-        ]),
-        ...collectionSchema(title, description, canonicalPath, topic.resources).slice(1),
+        ], siteOrigin),
+        ...collectionSchema(title, description, canonicalPath, topic.resources, siteOrigin).slice(1),
       ]
     : undefined;
   const breadcrumbs = topic
@@ -421,14 +407,7 @@ export function TopicPage() {
 
   return (
     <>
-      <SeoHead
-        canonicalPath={canonicalPath ?? (error ? false : undefined)}
-        description={description}
-        pathname={window.location.pathname}
-        robots={topic ? "index,follow" : "noindex,follow"}
-        structuredData={schema}
-        title={title}
-      />
+      <JsonLd data={schema} />
       <PublicPageShell breadcrumbs={breadcrumbs}>
         {!topic ? <LoadingOrError error={error} loading={loading} /> : (
           <>

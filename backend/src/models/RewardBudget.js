@@ -11,6 +11,6 @@ const rewardBudgetSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-const RewardBudget = mongoose.model("RewardBudget", rewardBudgetSchema);
+const RewardBudget = mongoose.models.RewardBudget || mongoose.model("RewardBudget", rewardBudgetSchema);
 
 export default RewardBudget;

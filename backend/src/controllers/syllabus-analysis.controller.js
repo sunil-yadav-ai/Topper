@@ -1,7 +1,6 @@
 import { basename } from "node:path";
 import { createHash } from "node:crypto";
 import mongoose from "mongoose";
-import multer from "multer";
 import SyllabusAnalysis from "../models/SyllabusAnalysis.js";
 import { decryptJson } from "../services/encrypted-json.service.js";
 import {
@@ -12,30 +11,6 @@ import {
   validateSyllabusFile,
 } from "../services/syllabus-analysis.service.js";
 import { findSyllabusResources } from "../services/syllabus-resource.service.js";
-
-const maxFileSize = 10 * 1024 * 1024;
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: maxFileSize, files: 1 },
-  fileFilter(_request, file, callback) {
-    const extension = file.originalname.split(".").pop()?.toLowerCase();
-    const supported = {
-      pdf: "application/pdf",
-      jpg: "image/jpeg",
-      jpeg: "image/jpeg",
-      png: "image/png",
-    };
-    if (!supported[extension] || supported[extension] !== file.mimetype) {
-      const error = new Error("Upload a PDF, JPG, JPEG, or PNG syllabus.");
-      error.statusCode = 400;
-      callback(error);
-      return;
-    }
-    callback(null, true);
-  },
-});
-
-export const receiveSyllabusFile = upload.single("file");
 
 function badRequest(message) {
   const error = new Error(message);

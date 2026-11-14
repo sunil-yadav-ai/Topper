@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import Panel from "../components/Panel.jsx";
 import TopperLogo from "../components/TopperLogo.jsx";
 
@@ -29,7 +29,7 @@ export default function TermsPage() {
   return (
     <main className="min-h-screen bg-[#fff9ec] px-4 py-8 text-[#171717] sm:px-8 sm:py-12">
       <div className="mx-auto max-w-3xl">
-        <Link aria-label="Topper home" className="inline-block" to="/">
+        <Link aria-label="Topper home" className="inline-block" href="/">
           <TopperLogo />
         </Link>
         <Panel className="mt-8 border-[#171717] bg-white shadow-[6px_6px_0_#171717]">
@@ -46,7 +46,7 @@ export default function TermsPage() {
               </section>
             ))}
           </div>
-          <Link className="mt-7 inline-flex font-bold text-[#5e45bb] hover:underline" to="/">Back to Topper <span aria-hidden="true" className="ml-2">↗</span></Link>
+          <Link className="mt-7 inline-flex font-bold text-[#5e45bb] hover:underline" href="/">Back to Topper <span aria-hidden="true" className="ml-2">↗</span></Link>
         </Panel>
       </div>
     </main>

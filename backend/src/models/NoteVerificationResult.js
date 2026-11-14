@@ -43,9 +43,8 @@ const noteVerificationResultSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-const NoteVerificationResult = mongoose.model(
-  "NoteVerificationResult",
-  noteVerificationResultSchema,
-);
+const NoteVerificationResult =
+  mongoose.models.NoteVerificationResult ||
+  mongoose.model("NoteVerificationResult", noteVerificationResultSchema);
 
 export default NoteVerificationResult;

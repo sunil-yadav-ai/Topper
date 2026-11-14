@@ -133,6 +133,6 @@ pyqSchema.index({
   fileName: "text",
 });
 
-const Pyq = mongoose.model("Pyq", pyqSchema);
+const Pyq = mongoose.models.Pyq || mongoose.model("Pyq", pyqSchema);
 
 export default Pyq;

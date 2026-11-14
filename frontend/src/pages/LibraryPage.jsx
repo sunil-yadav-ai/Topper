@@ -1,5 +1,7 @@
+"use client";
+
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { api } from "../lib/api.js";
 import { usePageMotion } from "../lib/usePageMotion.js";
 
@@ -182,7 +184,7 @@ export default function LibraryPage() {
                       ? "Resources you upload are public immediately and listed here."
                       : "Open a note or PYQ to see it in this list."}
                 </p>
-                <Link className="mt-4 inline-block rounded-xl bg-brand px-4 py-2 text-sm font-bold text-white" to={section === "uploads" ? "/upload" : "/search"}>
+                <Link className="mt-4 inline-block rounded-xl bg-brand px-4 py-2 text-sm font-bold text-white" href={section === "uploads" ? "/upload" : "/search"}>
                   {section === "uploads" ? "Upload a resource" : "Find free resources"}
                 </Link>
               </div>
@@ -206,7 +208,7 @@ export default function LibraryPage() {
                           : `Saved ${new Date(item.savedAt).toLocaleDateString()}`}
                     </p>
                     <div className="mt-auto flex flex-wrap gap-2 pt-5">
-                      <Link className="flex-1 rounded-xl bg-brand px-3 py-2.5 text-center text-sm font-bold text-white hover:bg-indigo-700" to={`/resources/${item.type}/${item.id}`}>View Resource</Link>
+                      <Link className="flex-1 rounded-xl bg-brand px-3 py-2.5 text-center text-sm font-bold text-white hover:bg-indigo-700" href={`/resources/${item.type}/${item.id}`}>View Resource</Link>
                       {section === "saved" && (
                         <>
                           <select

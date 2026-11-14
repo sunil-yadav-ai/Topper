@@ -72,7 +72,7 @@ export default function FlyingStudentsMascot({ className = "" }) {
       aria-hidden="true"
       className={`ed-flying-students-mascot ${className}`}
     >
-      <img alt="" decoding="async" draggable="false" height="768" src={illustration} width="1151" />
+      <img alt="" decoding="async" draggable="false" height="768" src={illustration.src} width="1151" />
     </div>
   );
 }

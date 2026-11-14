@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { Bell } from "lucide-react";
 import { api } from "../lib/api.js";
 
@@ -138,7 +138,7 @@ export default function NotificationBell() {
                     <Link
                       className="block text-left"
                       onClick={() => markRead(notification)}
-                      to={notification.link || "/notifications"}
+                      href={notification.link || "/notifications"}
                     >
                       <p className="text-sm font-bold text-ink">{notification.title}</p>
                       <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs leading-5 text-slate-600">{notification.message}</p>
@@ -174,7 +174,7 @@ export default function NotificationBell() {
           <Link
             className="block border-t border-slate-100 px-4 py-3 text-center text-sm font-bold text-brand hover:bg-slate-50"
             onClick={() => setOpen(false)}
-            to="/notifications"
+            href="/notifications"
           >
             View notification history
           </Link>

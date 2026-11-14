@@ -1,5 +1,8 @@
+"use client";
+
 import { useEffect, useRef, useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useGSAP } from "@gsap/react";
 import {
   BookOpenText,
@@ -25,9 +28,23 @@ export function SiteHeader() {
   return user ? <AuthenticatedSiteHeader user={user} /> : <PublicSiteHeader />;
 }
 
+function ActiveLink({ children, className = "", href, ...props }) {
+  const pathname = usePathname();
+  const active = pathname === href || pathname.startsWith(`${href}/`);
+  return (
+    <Link
+      className={`${className}${active ? " is-active" : ""}`}
+      href={href}
+      {...props}
+    >
+      {children}
+    </Link>
+  );
+}
+
 function PublicSiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const { pathname } = useLocation();
+  const pathname = usePathname();
 
   useEffect(() => {
     setMenuOpen(false);
@@ -45,7 +62,7 @@ function PublicSiteHeader() {
   return (
     <header className="ed-header ed-app-header">
       <div className="ed-header-inner">
-        <Link aria-label="Topper home" className="ed-logo-link" to="/"><TopperLogo /></Link>
+        <Link aria-label="Topper home" className="ed-logo-link" href="/"><TopperLogo /></Link>
         <button
           aria-expanded={menuOpen}
           aria-label={menuOpen ? "Close navigation" : "Open navigation"}
@@ -56,11 +73,11 @@ function PublicSiteHeader() {
           <span /><span />
         </button>
         <nav aria-label="Main navigation" className={`ed-nav ed-app-nav ${menuOpen ? "ed-nav-open" : ""}`}>
-          <Link to="/search">Explore</Link>
-          <Link to="/subjects">Subjects</Link>
-          <Link to="/pyqs">Question papers</Link>
-          <Link to="/login">Student sign in</Link>
-          <Link className="ed-nav-cta" to="/register">
+          <Link href="/search">Explore</Link>
+          <Link href="/subjects">Subjects</Link>
+          <Link href="/pyqs">Question papers</Link>
+          <Link href="/login">Student sign in</Link>
+          <Link className="ed-nav-cta" href="/register">
             Join for free
             <span aria-hidden="true" className="ed-arrow">→</span>
           </Link>
@@ -74,10 +91,8 @@ export function AuthenticatedSiteHeader({ user }) {
   const { signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [signOutError, setSignOutError] = useState("");
-  const { pathname } = useLocation();
-  const navigate = useNavigate();
-  const navLinkClass = ({ isActive }) =>
-    `ed-nav-link${isActive ? " is-active" : ""}`;
+  const pathname = usePathname();
+  const router = useRouter();
 
   useEffect(() => {
     setMenuOpen(false);
@@ -97,7 +112,7 @@ export function AuthenticatedSiteHeader({ user }) {
     setSignOutError("");
     try {
       await signOut();
-      navigate(user.role === "admin" ? "/admin/login" : "/", { replace: true });
+      router.replace(user.role === "admin" ? "/admin/login" : "/");
     } catch (error) {
       setSignOutError(error.response?.data?.message ?? error.message ?? "Could not sign out. Please try again.");
     }
@@ -106,7 +121,7 @@ export function AuthenticatedSiteHeader({ user }) {
   return (
     <header className="ed-header ed-app-header">
       <div className="ed-header-inner">
-        <Link aria-label="Topper home" className="ed-logo-link" to="/"><TopperLogo /></Link>
+        <Link aria-label="Topper home" className="ed-logo-link" href="/"><TopperLogo /></Link>
         <button
           aria-expanded={menuOpen}
           aria-controls="ed-main-navigation"
@@ -120,31 +135,31 @@ export function AuthenticatedSiteHeader({ user }) {
         <nav aria-label="Main navigation" className={`ed-nav ed-app-nav ${menuOpen ? "ed-nav-open" : ""}`} id="ed-main-navigation">
           {user.role === "user" && (
             <>
-              <NavLink className={navLinkClass} to="/search"><Compass aria-hidden="true" />Explore</NavLink>
-              <NavLink className={navLinkClass} to="/uploads"><Upload aria-hidden="true" />Upload</NavLink>
-              <NavLink className={navLinkClass} to="/practice"><Sparkles aria-hidden="true" />AI Practice</NavLink>
-              <NavLink className={navLinkClass} to="/syllabus"><BookOpenText aria-hidden="true" />Syllabus analyzer</NavLink>
+              <ActiveLink className="ed-nav-link" href="/search"><Compass aria-hidden="true" />Explore</ActiveLink>
+              <ActiveLink className="ed-nav-link" href="/uploads"><Upload aria-hidden="true" />Upload</ActiveLink>
+              <ActiveLink className="ed-nav-link" href="/practice"><Sparkles aria-hidden="true" />AI Practice</ActiveLink>
+              <ActiveLink className="ed-nav-link" href="/syllabus"><BookOpenText aria-hidden="true" />Syllabus analyzer</ActiveLink>
               {user.username && (
-                <NavLink className={navLinkClass} to={`/profile/${encodeURIComponent(user.username)}`}>
+                <ActiveLink className="ed-nav-link" href={`/profile/${encodeURIComponent(user.username)}`}>
                   <UserRound aria-hidden="true" />My profile
-                </NavLink>
+                </ActiveLink>
               )}
-              <NavLink className={navLinkClass} to="/library"><LibraryBig aria-hidden="true" />My library</NavLink>
+              <ActiveLink className="ed-nav-link" href="/library"><LibraryBig aria-hidden="true" />My library</ActiveLink>
             </>
           )}
           {user.role === "admin" && (
-            <NavLink className={navLinkClass} to="/search"><Compass aria-hidden="true" />Explore</NavLink>
+            <ActiveLink className="ed-nav-link" href="/search"><Compass aria-hidden="true" />Explore</ActiveLink>
           )}
           <NotificationBell />
           <button className="ed-nav-signout" onClick={handleSignOut} type="button">
             <LogOut aria-hidden="true" />Sign out
           </button>
           {user.role === "admin" && (
-            <NavLink className="ed-nav-cta" to="/admin">
+            <Link className="ed-nav-cta" href="/admin">
               <LayoutDashboard aria-hidden="true" />
               Admin dashboard
               <span aria-hidden="true" className="ed-arrow">→</span>
-            </NavLink>
+            </Link>
           )}
         </nav>
         {signOutError && <p className="ed-nav-error" role="alert">{signOutError}</p>}
@@ -154,11 +169,14 @@ export function AuthenticatedSiteHeader({ user }) {
 }
 
 export function SiteFooter() {
-  const shareUrl = encodeURIComponent(window.location.origin);
+  const [shareUrl, setShareUrl] = useState("");
+  useEffect(() => {
+    setShareUrl(encodeURIComponent(window.location.origin));
+  }, []);
   const shareText = encodeURIComponent(
     "Learn Together. Rise Together. Discover Topper, a free student resource-sharing community.",
   );
-  const contactEmail = (import.meta.env.VITE_CONTACT_EMAIL ?? "").trim();
+  const contactEmail = (process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "").trim();
   const validContactEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)
     ? contactEmail
     : "";
@@ -169,15 +187,15 @@ export function SiteFooter() {
       <div className="ed-footer-inner">
         <div className="ed-footer-main">
           <div className="ed-footer-brand">
-            <Link aria-label="Topper home" to="/"><TopperLogo inverse /></Link>
+            <Link aria-label="Topper home" href="/"><TopperLogo inverse /></Link>
             <p>Learn Together.<br /><span>Rise Together.</span></p>
             <span className="ed-footer-free">FREE TO LEARN · FREE TO SHARE</span>
           </div>
           <div className="ed-footer-links">
-            <div><h2>Explore</h2><Link to="/search">Knowledge vault</Link><Link to="/subjects">Study subjects</Link><Link to="/pyqs">Previous-year papers</Link><Link to="/syllabus">Syllabus explorer</Link></div>
-            <div><h2>Join in</h2><Link to="/register">Share your notes</Link><Link to="/login">Student sign in</Link><Link to="/library">Your library</Link></div>
-            <div><h2>About</h2><Link to="/#about">Our story</Link><Link to="/#verification">Thoughtful verification</Link><Link to="/terms">Terms &amp; conditions</Link></div>
-            <div><h2>Privacy</h2><Link to="/advertising">Privacy &amp; advertising details</Link>{validContactEmail ? <a href={`mailto:${validContactEmail}`}>Contact Topper</a> : <span className="ed-footer-coming-soon">Contact details coming soon</span>}</div>
+            <div><h2>Explore</h2><Link href="/search">Knowledge vault</Link><Link href="/subjects">Study subjects</Link><Link href="/pyqs">Previous-year papers</Link><Link href="/syllabus">Syllabus explorer</Link></div>
+            <div><h2>Join in</h2><Link href="/register">Share your notes</Link><Link href="/login">Student sign in</Link><Link href="/library">Your library</Link></div>
+            <div><h2>About</h2><Link href="/#about">Our story</Link><Link href="/#verification">Thoughtful verification</Link><Link href="/terms">Terms &amp; conditions</Link></div>
+            <div><h2>Privacy</h2><Link href="/advertising">Privacy &amp; advertising details</Link>{validContactEmail ? <a href={`mailto:${validContactEmail}`}>Contact Topper</a> : <span className="ed-footer-coming-soon">Contact details coming soon</span>}</div>
           </div>
           <div className="ed-footer-social">
             <span>PASS THE GOOD STUFF ON.</span>
@@ -198,9 +216,9 @@ export function SiteFooter() {
   );
 }
 
-export default function ApplicationLayout() {
+export default function ApplicationLayout({ children }) {
   const rootRef = useRef(null);
-  const { pathname } = useLocation();
+  const pathname = usePathname();
 
   useGSAP(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -218,7 +236,7 @@ export default function ApplicationLayout() {
   return (
     <div className="ed-site ed-app-site" id="top" ref={rootRef}>
       <SiteHeader />
-      <div className="ed-app-content"><Outlet /></div>
+      <div className="ed-app-content">{children}</div>
       <SiteFooter />
     </div>
   );

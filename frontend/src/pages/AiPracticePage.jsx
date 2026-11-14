@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useRef, useState } from "react";
 import { useGSAP } from "@gsap/react";
 import {
@@ -618,3 +620,4 @@ function ReportList({ title, items, empty, tone }) {
     </section>
   );
 }
+

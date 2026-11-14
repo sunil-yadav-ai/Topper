@@ -51,6 +51,7 @@ contributionSchema.index(
 contributionSchema.index({ user: 1, createdAt: -1 });
 contributionSchema.index({ status: 1, createdAt: -1 });
 
-const Contribution = mongoose.model("Contribution", contributionSchema);
+const Contribution =
+  mongoose.models.Contribution || mongoose.model("Contribution", contributionSchema);
 
 export default Contribution;

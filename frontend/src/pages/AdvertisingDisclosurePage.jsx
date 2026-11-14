@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import Panel from "../components/Panel.jsx";
 import TopperLogo from "../components/TopperLogo.jsx";
 
@@ -6,7 +6,7 @@ export default function AdvertisingDisclosurePage() {
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-8 sm:px-8 sm:py-12">
       <div className="mx-auto max-w-3xl">
-        <Link aria-label="Topper home" className="inline-block" to="/">
+        <Link aria-label="Topper home" className="inline-block" href="/">
           <TopperLogo />
         </Link>
         <Panel className="mt-8 space-y-5">
@@ -37,7 +37,7 @@ export default function AdvertisingDisclosurePage() {
           <p className="rounded-xl bg-amber-50 p-4 text-sm leading-6 text-amber-900">
             Ad serving must remain disabled until the site owner has published a complete privacy policy and configured any consent mechanism required for the regions served, including a Google-certified CMP where required.
           </p>
-          <Link className="inline-block text-sm font-semibold text-brand hover:underline" to="/">Return to Topper</Link>
+          <Link className="inline-block text-sm font-semibold text-brand hover:underline" href="/">Return to Topper</Link>
         </Panel>
       </div>
     </main>

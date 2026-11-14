@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router } from "../lib/router.js";
 import {
   getStudentDashboard,
   saveStudentResource,

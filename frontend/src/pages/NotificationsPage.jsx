@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import Panel from "../components/Panel.jsx";
 import { api } from "../lib/api.js";
 import { usePageMotion } from "../lib/usePageMotion.js";
@@ -126,7 +128,7 @@ export default function NotificationsPage() {
                     </div>
                     <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{notification.message}</p>
                     <time className="mt-2 block text-xs text-slate-500" dateTime={notification.createdAt}>{new Date(notification.createdAt).toLocaleString()}</time>
-                    {notification.link && <Link className="mt-2 inline-block text-sm font-semibold text-brand hover:underline" onClick={() => markRead(notification)} to={notification.link}>Open related page</Link>}
+                    {notification.link && <Link className="mt-2 inline-block text-sm font-semibold text-brand hover:underline" onClick={() => markRead(notification)} href={notification.link}>Open related page</Link>}
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-3">
                     {!notification.isRead && (

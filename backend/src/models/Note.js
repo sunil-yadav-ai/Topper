@@ -211,6 +211,6 @@ noteSchema.index(
   { unique: true, partialFilterExpression: { revisionRoot: { $exists: true } } },
 );
 
-const Note = mongoose.model("Note", noteSchema);
+const Note = mongoose.models.Note || mongoose.model("Note", noteSchema);
 
 export default Note;

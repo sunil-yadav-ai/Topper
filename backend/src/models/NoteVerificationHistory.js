@@ -52,9 +52,8 @@ noteVerificationHistorySchema.index(
   { unique: true },
 );
 
-const NoteVerificationHistory = mongoose.model(
-  "NoteVerificationHistory",
-  noteVerificationHistorySchema,
-);
+const NoteVerificationHistory =
+  mongoose.models.NoteVerificationHistory ||
+  mongoose.model("NoteVerificationHistory", noteVerificationHistorySchema);
 
 export default NoteVerificationHistory;

@@ -1,5 +1,7 @@
+"use client";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
 import { notifyResourceOptionsUpdated } from "../lib/resource-options.js";
@@ -7,7 +9,7 @@ import AdUnit from "../components/AdUnit.jsx";
 import { PageLoader } from "../components/PageState.jsx";
 import { usePageMotion } from "../lib/usePageMotion.js";
 import useResponsiveFilters from "../lib/useResponsiveFilters.js";
-import SeoHead, { breadcrumbSchema, organizationSchema } from "../components/SeoHead.jsx";
+import { JsonLd, breadcrumbSchema, organizationSchema } from "../lib/seo-schema.jsx";
 import { getPublicResourcePath } from "../lib/navigation.js";
 
 const initialFilters = {
@@ -55,7 +57,7 @@ function Field({ label, name, onChange, required = false, ...props }) {
   );
 }
 
-export default function PyqsPage() {
+export default function PyqsPage({ siteOrigin }) {
   const { user } = useAuth();
   const rootRef = useRef(null);
   const [filtersOpen, setFiltersOpen] = useResponsiveFilters();
@@ -85,17 +87,17 @@ export default function PyqsPage() {
   const [reportDetails, setReportDetails] = useState("");
   const [submittingReport, setSubmittingReport] = useState(false);
   const structuredData = useMemo(() => [
-    ...organizationSchema().slice(0, 1),
+    ...organizationSchema(siteOrigin).slice(0, 1),
     breadcrumbSchema([
       { name: "Home", path: "/" },
       { name: "Previous-year question papers", path: "/pyqs" },
-    ]),
+    ], siteOrigin),
     {
       "@context": "https://schema.org",
       "@type": "CollectionPage",
       name: "Previous-Year Question Papers | Topper",
       description: "Browse published previous-year question papers by subject, semester, university and examination year on Topper.",
-      url: new URL("/pyqs", window.location.origin).href,
+      url: new URL("/pyqs", siteOrigin).href,
       ...(pyqs.length ? {
         mainEntity: {
           "@type": "ItemList",
@@ -104,12 +106,12 @@ export default function PyqsPage() {
             "@type": "ListItem",
             position: index + 1,
             name: pyq.title,
-            url: new URL(getPublicResourcePath({ ...pyq, type: "pyq" }), window.location.origin).href,
+            url: new URL(getPublicResourcePath({ ...pyq, type: "pyq" }), siteOrigin).href,
           })),
         },
       } : {}),
     },
-  ], [pyqs]);
+  ], [pyqs, siteOrigin]);
 
   const loadPyqs = useCallback(async () => {
     setLoading(true);
@@ -277,13 +279,7 @@ export default function PyqsPage() {
 
   return (
     <main className="ed-pyqs-page min-h-screen bg-slate-50" ref={rootRef}>
-      <SeoHead
-        description="Browse published previous-year question papers by subject, semester, university and examination year on Topper."
-        pathname={window.location.pathname}
-        robots="index,follow"
-        structuredData={structuredData}
-        title="Previous-Year Question Papers | Topper"
-      />
+      <JsonLd data={structuredData} />
       <section className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
         <div className="ed-pyq-hero relative mb-6 flex flex-wrap items-end justify-between gap-4 rounded-3xl border border-indigo-100 bg-gradient-to-br from-white via-white to-indigo-50 px-5 py-7 shadow-sm sm:mb-8 sm:px-8 sm:py-9" data-motion-intro>
           <div className="ed-pyq-hero-copy min-w-0">
@@ -488,7 +484,7 @@ export default function PyqsPage() {
                 {bookmarksOnly ? `${pyqs.length} saved papers` : `${pagination.total} public papers`}
               </p>
               {!user && (
-                <Link className="text-sm font-semibold text-brand hover:underline" to="/register">
+                <Link className="text-sm font-semibold text-brand hover:underline" href="/register">
                   Join to bookmark or report
                 </Link>
               )}
@@ -522,7 +518,7 @@ export default function PyqsPage() {
                     </dl>
                     <p className="mt-3 line-clamp-2 text-xs text-slate-500">{pyq.college} · {pyq.university}</p>
                     {pyq.uploadedByUsername && (
-                      <Link className="mt-2 w-fit text-xs font-semibold text-brand hover:underline" to={`/profile/${encodeURIComponent(pyq.uploadedByUsername)}`}>
+                      <Link className="mt-2 w-fit text-xs font-semibold text-brand hover:underline" href={`/profile/${encodeURIComponent(pyq.uploadedByUsername)}`}>
                         Shared by {pyq.uploadedBy}
                       </Link>
                     )}
@@ -530,7 +526,7 @@ export default function PyqsPage() {
                     <div className="mt-auto flex flex-wrap items-center gap-2 pt-5">
                       <Link
                         className="inline-flex flex-1 items-center justify-center rounded-xl bg-brand px-3 py-2.5 text-sm font-bold text-white hover:bg-indigo-700"
-                        to={getPublicResourcePath({ ...pyq, type: "pyq" })}
+                        href={getPublicResourcePath({ ...pyq, type: "pyq" })}
                       >
                         View Resource
                       </Link>

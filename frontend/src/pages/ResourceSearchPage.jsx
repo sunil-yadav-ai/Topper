@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import {
   BookOpen,
   ChevronLeft,
@@ -19,7 +21,6 @@ import useResponsiveFilters from "../lib/useResponsiveFilters.js";
 import { usePageMotion } from "../lib/usePageMotion.js";
 import AdUnit from "../components/AdUnit.jsx";
 import { EmptyState, PageLoader } from "../components/PageState.jsx";
-import SeoHead from "../components/SeoHead.jsx";
 
 const pageSize = 12;
 const noteMarksOptions = ["2", "3", "4", "5", "6", "8", "10", "12", "15", "20"];
@@ -362,12 +363,6 @@ export default function ResourceSearchPage() {
 
   return (
     <main className="ed-resource-search-page ed-explore-page min-h-screen bg-slate-50" ref={rootRef}>
-      <SeoHead
-        description="Search published student notes and question papers by subject, topic, university, semester and year on Topper."
-        pathname={window.location.pathname}
-        robots="noindex,follow"
-        title="Search Study Notes and Question Papers | Topper"
-      />
       <section className="mx-auto  max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
         <header className="ed-explore-hero   mb-6 rounded-3xl border border-orange-100 bg-gradient-to-br from-white via-white to-orange-50 px-5 py-7 shadow-sm sm:mb-8 sm:px-8 sm:py-9" data-motion-intro>
           <p className="text-xs  font-bold uppercase tracking-[0.16em] text-brand sm:text-sm">The Topper resource library</p>
@@ -626,7 +621,7 @@ export default function ResourceSearchPage() {
                       {resource.uploader?.username ? (
                         <Link
                           className="ed-explore-badge rounded-lg border border-orange-200/80 bg-white/80 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-brand shadow-sm backdrop-blur-md hover:underline"
-                          to={`/profile/${encodeURIComponent(resource.uploader.username)}`}
+                          href={`/profile/${encodeURIComponent(resource.uploader.username)}`}
                         >
                           {resource.uploader.fullName || "Uploader unavailable"}
                         </Link>
@@ -666,12 +661,12 @@ export default function ResourceSearchPage() {
                     <p className="mt-2 text-xs font-medium text-slate-600">{new Date(resource.createdAt).toLocaleDateString()} · {resource.helpfulCount} found helpful</p>
                     <div className="ed-explore-card-actions mt-auto flex flex-wrap items-center gap-2 pt-5">
                       {user ? (
-                        <Link className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/85 px-3 py-2.5 text-center text-sm font-bold text-slate-700 shadow-sm transition hover:bg-orange-50" to={`/resources/${resource.type}/${resource.id}`}>
+                        <Link className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/85 px-3 py-2.5 text-center text-sm font-bold text-slate-700 shadow-sm transition hover:bg-orange-50" href={`/resources/${resource.type}/${resource.id}`}>
                           <FileText aria-hidden="true" size={16} />
                           Open resource
                         </Link>
                       ) : (
-                        <Link className="flex-1 rounded-xl bg-brand px-3 py-2.5 text-center text-sm font-bold text-white shadow-sm transition hover:bg-orange-700" to="/login">
+                        <Link className="flex-1 rounded-xl bg-brand px-3 py-2.5 text-center text-sm font-bold text-white shadow-sm transition hover:bg-orange-700" href="/login">
                           Sign in to open
                         </Link>
                       )}

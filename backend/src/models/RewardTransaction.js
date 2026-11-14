@@ -38,9 +38,8 @@ const rewardTransactionSchema = new mongoose.Schema(
 rewardTransactionSchema.index({ user: 1, createdAt: -1 });
 rewardTransactionSchema.index({ createdAt: -1 });
 
-const RewardTransaction = mongoose.model(
-  "RewardTransaction",
-  rewardTransactionSchema,
-);
+const RewardTransaction =
+  mongoose.models.RewardTransaction ||
+  mongoose.model("RewardTransaction", rewardTransactionSchema);
 
 export default RewardTransaction;

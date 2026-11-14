@@ -29,6 +29,6 @@ const resourceSchema = new mongoose.Schema(
 resourceSchema.index({ uploadedBy: 1, createdAt: -1 });
 resourceSchema.index({ uploadedBy: 1, status: 1, type: 1 });
 
-const Resource = mongoose.model("Resource", resourceSchema);
+const Resource = mongoose.models.Resource || mongoose.model("Resource", resourceSchema);
 
 export default Resource;

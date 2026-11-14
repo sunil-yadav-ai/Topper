@@ -1,22 +1,89 @@
 import dotenv from "dotenv";
+import { existsSync } from "node:fs";
+import { getServers, setServers } from "node:dns";
+import { isIP } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+export function resolveBackendEnvPath(cwd = process.cwd()) {
+  const moduleDirectory = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    resolve(cwd, "backend", ".env"),
+    resolve(cwd, "..", "backend", ".env"),
+    resolve(cwd, ".env"),
+    resolve(moduleDirectory, "../../.env"),
+  ];
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[3];
+}
+
 dotenv.config({
-  path: resolve(dirname(fileURLToPath(import.meta.url)), "../../.env"),
+  path: resolveBackendEnvPath(),
+});
+
+const mongodbUri =
+  process.env.MONGODB_URI ??
+  "mongodb://127.0.0.1:27017/student_resource_sharing";
+
+export function shouldConfigureMongoDns(uri) {
+  return /^mongodb\+srv:\/\//i.test(uri);
+}
+
+export function parseMongoDnsServers(value) {
+  if (value == null) return [];
+  if (typeof value !== "string") {
+    throw new Error("MONGODB_DNS_SERVERS must be a comma-separated list of IP addresses.");
+  }
+  if (value.trim() === "") return [];
+
+  const servers = value.split(",").map((server) => server.trim()).filter(Boolean);
+  if (servers.some((server) => isIP(server) === 0)) {
+    throw new Error("MONGODB_DNS_SERVERS must contain only IPv4 or IPv6 addresses.");
+  }
+  return servers;
+}
+
+const usesMongoSrv = shouldConfigureMongoDns(mongodbUri);
+const mongodbDnsServers = usesMongoSrv
+  ? parseMongoDnsServers(process.env.MONGODB_DNS_SERVERS)
+  : [];
+const dnsServersKey = Symbol.for("topper.mongodb.dns-servers");
+const previouslyConfiguredDnsServers = globalThis[dnsServersKey];
+
+if (mongodbDnsServers.length) {
+  if (
+    previouslyConfiguredDnsServers &&
+    JSON.stringify(previouslyConfiguredDnsServers) !== JSON.stringify(mongodbDnsServers)
+  ) {
+    throw new Error("MONGODB_DNS_SERVERS cannot change after DNS configuration.");
+  }
+  if (!previouslyConfiguredDnsServers) {
+    try {
+      setServers(mongodbDnsServers);
+    } catch (error) {
+      throw new Error(
+        "Could not apply MONGODB_DNS_SERVERS. Configure DNS at the operating-system or hosting level instead.",
+        { cause: error },
+      );
+    }
+    globalThis[dnsServersKey] = mongodbDnsServers;
+  }
+}
+
+console.info("[mongodb-dns] Node DNS resolver configuration loaded.", {
+  srvResolutionEnabled: usesMongoSrv,
+  configured: mongodbDnsServers.length > 0,
+  servers: getServers(),
 });
 
 export const env = {
-  port: Number.parseInt(process.env.PORT ?? "5000", 10),
-  mongodbUri:
-    process.env.MONGODB_URI ??
-    "mongodb://127.0.0.1:27017/student_resource_sharing",
+  mongodbUri,
+  mongodbDnsServers,
   corsOrigins: (process.env.CORS_ORIGIN ??
-    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:5175,http://127.0.0.1:5175")
+    "http://localhost:3000,http://127.0.0.1:3000")
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean),
-  frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:5173",
+  frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:3000",
   jwtSecret: process.env.JWT_SECRET ?? "",
   smtpHost: process.env.SMTP_HOST ?? "smtp.gmail.com",
   smtpPort: Number.parseInt(process.env.SMTP_PORT ?? "587", 10),
@@ -88,15 +155,6 @@ export function isAllowedCorsOrigin(origin, allowedOrigins = env.corsOrigins) {
     return false;
   }
 
-  if (
-    process.env.NODE_ENV !== "production" &&
-    requested.protocol === "http:" &&
-    Number(requested.port) >= 5173 &&
-    Number(requested.port) <= 5199
-  ) {
-    return true;
-  }
-
   const aliases = {
     localhost: new Set(["localhost", "127.0.0.1", "[::1]"]),
     "127.0.0.1": new Set(["localhost", "127.0.0.1", "[::1]"]),
@@ -114,10 +172,6 @@ export function isAllowedCorsOrigin(origin, allowedOrigins = env.corsOrigins) {
       return false;
     }
   });
-}
-
-if (!Number.isInteger(env.port) || env.port < 1 || env.port > 65535) {
-  throw new Error("PORT must be an integer between 1 and 65535.");
 }
 
 if (!Number.isInteger(env.smtpPort) || env.smtpPort < 1 || env.smtpPort > 65535) {

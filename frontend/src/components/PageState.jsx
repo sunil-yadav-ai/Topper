@@ -1,4 +1,6 @@
-import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
+"use client";
+
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useGSAP } from "@gsap/react";
 import { gsap } from "../lib/gsap.js";
 import {
@@ -124,11 +126,6 @@ function useDelayedVisibility(active, delay = 200) {
   return visible;
 }
 
-function DelayedRouteLoader({ label }) {
-  const visible = useDelayedVisibility(true);
-  return visible ? <PageLoader label={label} /> : <div aria-hidden="true" className="ed-route-pending" />;
-}
-
 export function ApiPageLoader() {
   const requestCount = useSyncExternalStore(
     subscribeToPageRequests,
@@ -154,10 +151,3 @@ export function EmptyState({ title, children, icon = "book", illustration, class
   );
 }
 
-export function BrandedSuspense({ children, label = "Preparing your learning space…" }) {
-  return (
-    <Suspense fallback={<DelayedRouteLoader label={label} />}>
-      {children}
-    </Suspense>
-  );
-}

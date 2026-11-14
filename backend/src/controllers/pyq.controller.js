@@ -1,6 +1,5 @@
 import { basename } from "node:path";
 import mongoose from "mongoose";
-import multer from "multer";
 import Pyq from "../models/Pyq.js";
 import PyqReport from "../models/PyqReport.js";
 import Bookmark from "../models/Bookmark.js";
@@ -21,36 +20,6 @@ import {
 } from "../services/student-library.service.js";
 import { sendResourceUploadEmail } from "../services/email-notification.service.js";
 import { awardContribution } from "../services/reward.service.js";
-
-const maxFileSize = 20 * 1024 * 1024;
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: maxFileSize, files: 1 },
-  fileFilter(_request, file, callback) {
-    const extension = file.originalname.split(".").pop()?.toLowerCase();
-    const mimeTypes = {
-      pdf: "application/pdf",
-      jpg: "image/jpeg",
-      jpeg: "image/jpeg",
-      png: "image/png",
-    };
-    if (!mimeTypes[extension] || file.mimetype !== mimeTypes[extension]) {
-      const error = new Error("Upload a PDF, JPG, JPEG, or PNG question paper.");
-      error.statusCode = 400;
-      callback(error);
-      return;
-    }
-    callback(null, true);
-  },
-});
-
-const receiveSinglePyqPdf = upload.single("file");
-export function receivePyqPdf(request, response, next) {
-  receiveSinglePyqPdf(request, response, (error) => {
-    if (error) error.uploadKind = "pyq";
-    next(error);
-  });
-}
 
 function badRequest(message) {
   const error = new Error(message);

@@ -1,5 +1,7 @@
+"use client";
+
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import Link from "next/link";
 import {
   ArrowLeft,
   BookOpen,
@@ -29,12 +31,11 @@ function messageFrom(error) {
   return error.response?.data?.message ?? error.message ?? "This resource could not be opened.";
 }
 
-export default function ResourceViewerPage() {
-  const { resourceType = "", resourceId = "" } = useParams();
+export default function ResourceViewerPage({ resourceType = "", resourceId = "" }) {
   const canvasRef = useRef(null);
   const rootRef = useRef(null);
   const activityRecordRef = useRef("");
-  const activityOpenIdRef = useRef(crypto.randomUUID());
+  const activityOpenIdRef = useRef("");
   const { user } = useAuth();
   const [fileUrl, setFileUrl] = useState("");
   const [format, setFormat] = useState("");
@@ -214,7 +215,7 @@ export default function ResourceViewerPage() {
         <Link
           className="mb-5 inline-flex min-h-10 items-center gap-2 rounded-full border border-orange-200 bg-white/80 px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-400 hover:text-brand"
           data-motion-intro
-          to="/search"
+          href="/search"
         >
           <ArrowLeft aria-hidden="true" size={16} />
           Back to Explore

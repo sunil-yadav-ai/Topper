@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { api } from "../../lib/api.js";
 
@@ -133,7 +133,7 @@ export default function CommunityReports({ admin = false }) {
                 {admin && report.note?.id && (
                   <Link
                     className="mt-2 inline-block text-sm font-semibold text-brand hover:underline"
-                    to={`/resources/note/${report.note.id}`}
+                    href={`/resources/note/${report.note.id}`}
                   >
                     View note
                   </Link>

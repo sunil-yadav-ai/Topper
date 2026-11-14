@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router } from "../lib/router.js";
 import {
   createNote,
   deleteMyNote,
@@ -6,9 +6,9 @@ import {
   getMyNoteOcr,
   getMyNoteVerification,
   getPublishedNotes,
-  receiveNoteFile,
   resubmitCorrectedNote,
 } from "../controllers/note.controller.js";
+import { receiveMultipart } from "../middleware/next-upload.js";
 import {
   createNoteCommunityReport,
   getCommunityReportsForReview,
@@ -19,6 +19,11 @@ import {
 import { requireAuth, requireRole } from "../middleware/auth.middleware.js";
 
 const noteRouter = Router();
+const receiveNoteFile = receiveMultipart({
+  fields: ["file"],
+  maxFileSize: 10 * 1024 * 1024,
+  single: true,
+});
 
 noteRouter.get(
   "/reports/review",

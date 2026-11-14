@@ -1,6 +1,5 @@
 import { basename } from "node:path";
 import mongoose from "mongoose";
-import multer from "multer";
 import Note from "../models/Note.js";
 import NoteOcrJob from "../models/NoteOcrJob.js";
 import NoteOcrResult from "../models/NoteOcrResult.js";
@@ -14,7 +13,6 @@ import { removeCommunityReportNotifications } from "./note-community.controller.
 import {
   deleteNoteFile,
   deleteNotePreview,
-  getNoteFormat,
   uploadNoteFile,
   uploadNotePreview,
   validateNoteFile,
@@ -24,24 +22,6 @@ import { decryptOcrResult } from "../services/note-ocr.service.js";
 import { decryptJson } from "../services/encrypted-json.service.js";
 import { createNotification } from "../services/notification.service.js";
 import { sendResourceUploadEmail } from "../services/email-notification.service.js";
-
-const maxFileSize = 10 * 1024 * 1024;
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: maxFileSize, files: 1 },
-  fileFilter(_request, file, callback) {
-    if (!getNoteFormat(file.originalname)) {
-      const error = new Error("Upload a PDF, JPG, JPEG, or PNG file.");
-      error.statusCode = 400;
-      callback(error);
-      return;
-    }
-
-    callback(null, true);
-  },
-});
-
-export const receiveNoteFile = upload.single("file");
 
 function requiredText(body, field, maxLength) {
   const value = typeof body[field] === "string" ? body[field].trim() : "";

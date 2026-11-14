@@ -1,5 +1,8 @@
+"use client";
+
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Camera } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
@@ -31,9 +34,8 @@ function errorMessage(error) {
   return error.response?.data?.message ?? error.message ?? "Something went wrong.";
 }
 
-export default function ProfilePage() {
-  const { username = "" } = useParams();
-  const navigate = useNavigate();
+export default function ProfilePage({ username = "" }) {
+  const router = useRouter();
   const { user, updateUser } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -124,7 +126,7 @@ export default function ProfilePage() {
       setData((current) => ({ ...current, profile: { ...current.profile, ...result.profile } }));
       setEditing(false);
       if (result.profile.username !== username) {
-        navigate(`/profile/${encodeURIComponent(result.profile.username)}`, { replace: true });
+        router.replace(`/profile/${encodeURIComponent(result.profile.username)}`);
       }
     } catch (requestError) {
       setSaveError(errorMessage(requestError));
@@ -197,7 +199,7 @@ export default function ProfilePage() {
           <p className="ed-profile-kicker">A LITTLE DETOUR</p>
           <h1>Profile unavailable</h1>
           <p className="ed-profile-error-message" role="alert">{error || "Profile not found."}</p>
-          <Link className="ed-profile-button ed-profile-button-dark" to="/search">
+          <Link className="ed-profile-button ed-profile-button-dark" href="/search">
             Explore resources <span aria-hidden="true">↗</span>
           </Link>
         </main>
@@ -435,7 +437,7 @@ export default function ProfilePage() {
                   <p className="ed-resource-date">SHARED {formatDate(item.createdAt, { day: "numeric", month: "short", year: "numeric" }).toUpperCase()}</p>
                   <Link
                     className="ed-profile-button ed-profile-button-resource"
-                    to={`/resources/${item.type}/${item.id}`}
+                    href={`/resources/${item.type}/${item.id}`}
                   >
                     View Resource <span aria-hidden="true">↗</span>
                   </Link>

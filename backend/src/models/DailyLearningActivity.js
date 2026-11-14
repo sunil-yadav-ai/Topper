@@ -27,9 +27,8 @@ dailyLearningActivitySchema.index(
 );
 dailyLearningActivitySchema.index({ userId: 1, activityDate: -1 });
 
-const DailyLearningActivity = mongoose.model(
-  "DailyLearningActivity",
-  dailyLearningActivitySchema,
-);
+const DailyLearningActivity =
+  mongoose.models.DailyLearningActivity ||
+  mongoose.model("DailyLearningActivity", dailyLearningActivitySchema);
 
 export default DailyLearningActivity;

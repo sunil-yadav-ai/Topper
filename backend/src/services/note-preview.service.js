@@ -1,3 +1,5 @@
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 import { createCanvas } from "@napi-rs/canvas";
 import {
   getDocument,
@@ -5,9 +7,10 @@ import {
 } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { getPrivateNoteDownloadUrl, uploadNotePreview } from "./note-storage.service.js";
 
-GlobalWorkerOptions.workerSrc = import.meta.resolve(
-  "pdfjs-dist/legacy/build/pdf.worker.mjs",
-);
+const require = createRequire(import.meta.url);
+GlobalWorkerOptions.workerSrc = pathToFileURL(
+  require.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs"),
+).href;
 
 const previewWidth = 480;
 const previewHeight = 640;

@@ -26,6 +26,6 @@ geminiUsageSchema.index(
 );
 geminiUsageSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
-const GeminiUsage = mongoose.model("GeminiUsage", geminiUsageSchema);
+const GeminiUsage = mongoose.models.GeminiUsage || mongoose.model("GeminiUsage", geminiUsageSchema);
 
 export default GeminiUsage;

@@ -35,6 +35,6 @@ const pyqReportSchema = new mongoose.Schema(
 
 pyqReportSchema.index({ pyq: 1, reportedBy: 1 }, { unique: true });
 
-const PyqReport = mongoose.model("PyqReport", pyqReportSchema);
+const PyqReport = mongoose.models.PyqReport || mongoose.model("PyqReport", pyqReportSchema);
 
 export default PyqReport;

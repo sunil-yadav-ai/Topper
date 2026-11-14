@@ -1,16 +1,18 @@
-import { useEffect, useRef } from "react";
+"use client";
 
-const publisherId = import.meta.env.VITE_ADSENSE_CLIENT_ID ?? "";
-const adsEnabled = import.meta.env.VITE_ADSENSE_ENABLED === "true";
-const consentReady = import.meta.env.VITE_ADSENSE_CONSENT_READY === "true";
+import { useEffect, useRef, useState } from "react";
+
+const publisherId = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID ?? "";
+const adsEnabled = process.env.NEXT_PUBLIC_ADSENSE_ENABLED === "true";
+const consentReady = process.env.NEXT_PUBLIC_ADSENSE_CONSENT_READY === "true";
 const slots = {
-  home: import.meta.env.VITE_ADSENSE_SLOT_HOME ?? "",
-  search: import.meta.env.VITE_ADSENSE_SLOT_SEARCH ?? "",
-  pyqs: import.meta.env.VITE_ADSENSE_SLOT_PYQS ?? "",
+  home: process.env.NEXT_PUBLIC_ADSENSE_SLOT_HOME ?? "",
+  search: process.env.NEXT_PUBLIC_ADSENSE_SLOT_SEARCH ?? "",
+  pyqs: process.env.NEXT_PUBLIC_ADSENSE_SLOT_PYQS ?? "",
 };
 
 function isProductionSite() {
-  if (!import.meta.env.PROD || typeof window === "undefined") return false;
+  if (process.env.NODE_ENV !== "production" || typeof window === "undefined") return false;
   const { hostname } = window.location;
   return (
     hostname !== "localhost" &&
@@ -38,13 +40,18 @@ function loadAdSenseScript() {
 
 export default function AdUnit({ placement, className = "" }) {
   const adRef = useRef(null);
+  const [productionSite, setProductionSite] = useState(false);
   const slot = slots[placement];
   const configured =
     adsEnabled &&
     consentReady &&
-    isProductionSite() &&
+    productionSite &&
     /^ca-pub-\d+$/.test(publisherId) &&
     /^\d+$/.test(slot);
+
+  useEffect(() => {
+    setProductionSite(isProductionSite());
+  }, []);
 
   useEffect(() => {
     if (!configured || !adRef.current) return;

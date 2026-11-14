@@ -13,6 +13,7 @@ const rewardAccountSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-const RewardAccount = mongoose.model("RewardAccount", rewardAccountSchema);
+const RewardAccount =
+  mongoose.models.RewardAccount || mongoose.model("RewardAccount", rewardAccountSchema);
 
 export default RewardAccount;

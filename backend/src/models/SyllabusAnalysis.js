@@ -43,6 +43,7 @@ syllabusAnalysisSchema.index(
   { unique: true, partialFilterExpression: { sourceHash: { $type: "string" } } },
 );
 
-const SyllabusAnalysis = mongoose.model("SyllabusAnalysis", syllabusAnalysisSchema);
+const SyllabusAnalysis =
+  mongoose.models.SyllabusAnalysis || mongoose.model("SyllabusAnalysis", syllabusAnalysisSchema);
 
 export default SyllabusAnalysis;

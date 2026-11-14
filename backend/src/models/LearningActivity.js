@@ -34,6 +34,7 @@ learningActivitySchema.index({ userId: 1, activityDate: -1 });
 learningActivitySchema.index({ userId: 1, resourceId: 1, openedAt: -1 });
 learningActivitySchema.index({ userId: 1, openId: 1 }, { unique: true });
 
-const LearningActivity = mongoose.model("LearningActivity", learningActivitySchema);
+const LearningActivity =
+  mongoose.models.LearningActivity || mongoose.model("LearningActivity", learningActivitySchema);
 
 export default LearningActivity;

@@ -71,9 +71,8 @@ noteCommunityReportSchema.index(
   { unique: true },
 );
 
-const NoteCommunityReport = mongoose.model(
-  "NoteCommunityReport",
-  noteCommunityReportSchema,
-);
+const NoteCommunityReport =
+  mongoose.models.NoteCommunityReport ||
+  mongoose.model("NoteCommunityReport", noteCommunityReportSchema);
 
 export default NoteCommunityReport;

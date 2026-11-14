@@ -31,9 +31,8 @@ studentResourceAccessSchema.index(
 studentResourceAccessSchema.index({ user: 1, lastAccessedAt: -1 });
 studentResourceAccessSchema.index({ user: 1, lastDownloadedAt: -1 });
 
-const StudentResourceAccess = mongoose.model(
-  "StudentResourceAccess",
-  studentResourceAccessSchema,
-);
+const StudentResourceAccess =
+  mongoose.models.StudentResourceAccess ||
+  mongoose.model("StudentResourceAccess", studentResourceAccessSchema);
 
 export default StudentResourceAccess;

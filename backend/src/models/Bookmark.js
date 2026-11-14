@@ -33,6 +33,6 @@ bookmarkSchema.index(
 );
 bookmarkSchema.index({ user: 1, folder: 1, updatedAt: -1 });
 
-const Bookmark = mongoose.model("Bookmark", bookmarkSchema);
+const Bookmark = mongoose.models.Bookmark || mongoose.model("Bookmark", bookmarkSchema);
 
 export default Bookmark;

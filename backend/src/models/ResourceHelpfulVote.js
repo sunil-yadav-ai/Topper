@@ -25,9 +25,8 @@ resourceHelpfulVoteSchema.index(
   { unique: true },
 );
 
-const ResourceHelpfulVote = mongoose.model(
-  "ResourceHelpfulVote",
-  resourceHelpfulVoteSchema,
-);
+const ResourceHelpfulVote =
+  mongoose.models.ResourceHelpfulVote ||
+  mongoose.model("ResourceHelpfulVote", resourceHelpfulVoteSchema);
 
 export default ResourceHelpfulVote;

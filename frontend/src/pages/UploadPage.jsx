@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { useGSAP } from "@gsap/react";
 import {
   ArrowUpRight,
@@ -384,7 +386,7 @@ export default function UploadPage() {
           {notice && (
             <div className="ed-upload-message ed-upload-success" role="status">
               <p><AnimatedIllustration className="ed-upload-success-art" variant="success" size={28} /> {notice}</p>
-              <Link to="/library">View your uploads →</Link>
+              <Link href="/library">View your uploads →</Link>
             </div>
           )}
 
@@ -532,7 +534,7 @@ export default function UploadPage() {
             <li>Question papers go through a review before they appear in Explore.</li>
             <li>Your uploads remain linked to your student account.</li>
           </ul>
-          <Link to="/search">Explore shared resources <span aria-hidden="true">↗</span></Link>
+          <Link href="/search">Explore shared resources <span aria-hidden="true">↗</span></Link>
           </div>
         </aside>
       </div>

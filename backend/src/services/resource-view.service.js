@@ -1,6 +1,3 @@
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
-
 const mimeTypes = {
   pdf: "application/pdf",
   jpg: "image/jpeg",
@@ -62,5 +59,5 @@ export async function streamResourceView(request, response, {
     const value = upstream.headers.get(header);
     if (value) response.set(header, value);
   }
-  await pipeline(Readable.fromWeb(upstream.body), response);
+  response.stream(upstream.body);
 }

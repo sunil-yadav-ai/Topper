@@ -29,9 +29,8 @@ const noteVerificationJobSchema = new mongoose.Schema(
 
 noteVerificationJobSchema.index({ status: 1, createdAt: 1 });
 
-const NoteVerificationJob = mongoose.model(
-  "NoteVerificationJob",
-  noteVerificationJobSchema,
-);
+const NoteVerificationJob =
+  mongoose.models.NoteVerificationJob ||
+  mongoose.model("NoteVerificationJob", noteVerificationJobSchema);
 
 export default NoteVerificationJob;

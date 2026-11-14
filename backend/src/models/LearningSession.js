@@ -118,6 +118,7 @@ learningSessionSchema.index(
 );
 learningSessionSchema.index({ student: 1, resource: 1, updatedAt: -1 });
 
-const LearningSession = mongoose.model("LearningSession", learningSessionSchema);
+const LearningSession =
+  mongoose.models.LearningSession || mongoose.model("LearningSession", learningSessionSchema);
 
 export default LearningSession;

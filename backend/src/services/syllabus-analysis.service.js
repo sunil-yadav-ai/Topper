@@ -1,3 +1,5 @@
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 import { PDFDocument } from "pdf-lib";
 import {
   getDocument,
@@ -8,9 +10,10 @@ import { env } from "../config/env.js";
 import { encryptJson } from "./encrypted-json.service.js";
 import { generateStructuredContent } from "./gemini-ai.service.js";
 
-GlobalWorkerOptions.workerSrc = import.meta.resolve(
-  "pdfjs-dist/legacy/build/pdf.worker.mjs",
-);
+const require = createRequire(import.meta.url);
+GlobalWorkerOptions.workerSrc = pathToFileURL(
+  require.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs"),
+).href;
 
 const maxFileSize = 10 * 1024 * 1024;
 const maxPdfPages = 50;
